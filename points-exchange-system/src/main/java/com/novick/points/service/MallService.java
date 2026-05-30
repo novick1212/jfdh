@@ -162,13 +162,26 @@ public class MallService {
     }
 
     @Transactional
-    public Map<String, Object> fulfillOrder(Long orderId) {
+    public Map<String, Object> fulfillOrder(Long orderId, String shippingCarrier, String trackingNo) {
         ExchangeOrder order = exchangeOrderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessException("订单不存在"));
         if (order.getStatus() != OrderStatus.CREATED) {
             throw new BusinessException("当前订单不可发货");
         }
+        if (trackingNo != null && !trackingNo.isBlank()) {
+            order.setTrackingNo(trackingNo.trim());
+            order.setTrackingUrl("https://m.kuaidi100.com/result.jsp?nu=" + trackingNo.trim());
+        } else {
+            order.setTrackingNo(null);
+            order.setTrackingUrl(null);
+        }
+        if (shippingCarrier != null && !shippingCarrier.isBlank()) {
+            order.setShippingCarrier(shippingCarrier.trim());
+        } else {
+            order.setShippingCarrier(null);
+        }
         order.setStatus(OrderStatus.FULFILLED);
+        order.setFulfilledAt(LocalDateTime.now());
         order.setUpdatedAt(LocalDateTime.now());
         exchangeOrderRepository.save(order);
         return toOrderMap(order);
@@ -246,6 +259,10 @@ public class MallService {
         data.put("recipientName", order.getRecipientName());
         data.put("phone", order.getPhone());
         data.put("address", order.getAddress());
+        data.put("shippingCarrier", order.getShippingCarrier());
+        data.put("trackingNo", order.getTrackingNo());
+        data.put("trackingUrl", order.getTrackingUrl());
+        data.put("fulfilledAt", order.getFulfilledAt());
         data.put("createdAt", order.getCreatedAt());
         return data;
     }

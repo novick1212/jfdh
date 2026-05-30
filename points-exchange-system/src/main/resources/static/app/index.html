@@ -66,6 +66,7 @@
                         <th>积分</th>
                         <th>状态</th>
                         <th>收货人</th>
+                        <th>物流</th>
                     </tr>
                     </thead>
                     <tbody id="orderTable"></tbody>
@@ -142,8 +143,13 @@
                 <td>${order.totalPoints}</td>
                 <td>${escapeHtml(order.status)}</td>
                 <td>${escapeHtml(order.recipientName)}</td>
+                <td>${
+                    order.trackingUrl
+                        ? `<a href="${escapeHtml(order.trackingUrl)}" target="_blank">查看物流</a><div class="muted" style="margin-top:4px;">${escapeHtml(order.trackingNo || "")}</div>`
+                        : "-"
+                }</td>
             </tr>
-        `).join("") || '<tr><td colspan="6">暂无订单</td></tr>';
+        `).join("") || '<tr><td colspan="7">暂无订单</td></tr>';
 
         document.getElementById("transactionTable").innerHTML = home.transactions.map(tx => `
             <tr>

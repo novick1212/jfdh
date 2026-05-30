@@ -83,7 +83,7 @@
                     </div>
                     <div class="form-group">
                         <label>封面图</label>
-                        <input id="itemCover" value="/res/default/bg/image/banner/3.png">
+                        <input id="itemCover" value="/res/default/bg/image/3.png">
                     </div>
                     <div class="form-group">
                         <label>排序</label>
@@ -108,6 +108,7 @@
                         <th>积分</th>
                         <th>状态</th>
                         <th>收货信息</th>
+                        <th>物流</th>
                         <th>操作</th>
                     </tr>
                     </thead>
@@ -176,9 +177,14 @@
                 <td>${order.totalPoints}</td>
                 <td>${escapeHtml(order.status)}</td>
                 <td>${escapeHtml(order.recipientName)} / ${escapeHtml(order.phone)}</td>
-                <td>${order.status === "CREATED" ? `<button class="btn btn-success" onclick="fulfillOrder(${order.id})">发货完成</button>` : "-"}</td>
+                <td>${
+                    order.trackingUrl
+                        ? `<a href="${escapeHtml(order.trackingUrl)}" target="_blank">查看物流</a><div class="muted" style="margin-top:4px;">${escapeHtml(order.trackingNo || "")}</div>`
+                        : "-"
+                }</td>
+                <td>${order.status === "CREATED" ? `<button class="btn btn-success" onclick="fulfillOrder(${order.id})">发货</button>` : "-"}</td>
             </tr>
-        `).join("") || '<tr><td colspan="7">暂无订单</td></tr>';
+        `).join("") || '<tr><td colspan="8">暂无订单</td></tr>';
 
         document.getElementById("userTable").innerHTML = users.map(user => `
             <tr>
@@ -192,8 +198,16 @@
     }
 
     async function fulfillOrder(orderId) {
+        const trackingNo = (prompt("请输入快递单号（可留空）：", "") || "").trim();
+        const shippingCarrier = (prompt("请输入快递公司（可留空）：", "") || "").trim();
         try {
-            await api(`/api/admin/orders/${orderId}/fulfill`, { method: "POST" });
+            await api(`/api/admin/orders/${orderId}/fulfill`, {
+                method: "POST",
+                body: JSON.stringify({
+                    trackingNo: trackingNo || null,
+                    shippingCarrier: shippingCarrier || null
+                })
+            });
             await loadAdminPage();
         } catch (e) {
             alert(e.message);

@@ -53,6 +53,17 @@ public class ExchangeOrder {
     @Column(nullable = false, length = 255)
     private String address;
 
+    @Column(length = 50)
+    private String shippingCarrier;
+
+    @Column(length = 50)
+    private String trackingNo;
+
+    @Column(length = 255)
+    private String trackingUrl;
+
+    private LocalDateTime fulfilledAt;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
@@ -149,6 +160,38 @@ public class ExchangeOrder {
 
     public void setAddress(String address) {
         this.address = address;
+    }
+
+    public String getShippingCarrier() {
+        return shippingCarrier;
+    }
+
+    public void setShippingCarrier(String shippingCarrier) {
+        this.shippingCarrier = shippingCarrier;
+    }
+
+    public String getTrackingNo() {
+        return trackingNo;
+    }
+
+    public void setTrackingNo(String trackingNo) {
+        this.trackingNo = trackingNo;
+    }
+
+    public String getTrackingUrl() {
+        return trackingUrl;
+    }
+
+    public void setTrackingUrl(String trackingUrl) {
+        this.trackingUrl = trackingUrl;
+    }
+
+    public LocalDateTime getFulfilledAt() {
+        return fulfilledAt;
+    }
+
+    public void setFulfilledAt(LocalDateTime fulfilledAt) {
+        this.fulfilledAt = fulfilledAt;
     }
 
     public LocalDateTime getCreatedAt() {

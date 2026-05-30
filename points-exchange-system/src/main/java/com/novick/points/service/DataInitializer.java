@@ -76,9 +76,9 @@ public class DataInitializer implements CommandLineRunner {
             rewardItemRepository.save(createItem("便携保温杯", "适合积分兑换的常用礼品", 299,
                     "/res/default/bg/image/icon/logo.png", 30, 1));
             rewardItemRepository.save(createItem("定制双肩包", "轻办公场景常用周边", 499,
-                    "/res/default/bg/image/banner/1.png", 15, 2));
+                    "/res/default/bg/image/1.png", 15, 2));
             rewardItemRepository.save(createItem("蓝牙耳机", "作为高价值兑换商品展示完整流程", 899,
-                    "/res/default/bg/image/banner/2.png", 8, 3));
+                    "/res/default/bg/image/2.png", 8, 3));
         }
     }
 

@@ -68,9 +68,10 @@ public class AdminController {
     }
 
     @PostMapping("/orders/{id}/fulfill")
-    public ApiResponse<Map<String, Object>> fulfillOrder(@PathVariable Long id, HttpSession session) {
+    public ApiResponse<Map<String, Object>> fulfillOrder(@PathVariable Long id,
+            @Valid @RequestBody FulfillOrderRequest request, HttpSession session) {
         sessionAuthService.requireRole(session, UserRole.ADMIN);
-        return ApiResponse.success("发货完成", mallService.fulfillOrder(id));
+        return ApiResponse.success("发货完成", mallService.fulfillOrder(id, request.getShippingCarrier(), request.getTrackingNo()));
     }
 
     @GetMapping("/users")
@@ -192,6 +193,27 @@ public class AdminController {
 
         public void setNote(String note) {
             this.note = note;
+        }
+    }
+
+    public static class FulfillOrderRequest {
+        private String shippingCarrier;
+        private String trackingNo;
+
+        public String getShippingCarrier() {
+            return shippingCarrier;
+        }
+
+        public void setShippingCarrier(String shippingCarrier) {
+            this.shippingCarrier = shippingCarrier;
+        }
+
+        public String getTrackingNo() {
+            return trackingNo;
+        }
+
+        public void setTrackingNo(String trackingNo) {
+            this.trackingNo = trackingNo;
         }
     }
 }
