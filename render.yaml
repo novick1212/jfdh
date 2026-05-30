@@ -4,7 +4,7 @@ services:
     env: docker
     rootDir: points-exchange-system
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /
+    healthCheckPath: /app/index.html
     disk:
       name: points-exchange-data
       mountPath: /app/data
