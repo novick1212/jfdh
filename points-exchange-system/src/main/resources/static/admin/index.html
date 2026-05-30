@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 积分兑换系统</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<div class="page-shell">
+    <aside class="sidebar">
+        <div class="logo">
+            <img src="/res/default/bg/image/icon/logo1.png" alt="logo">
+            <div>
+                <strong>积分兑换后台</strong>
+                <div class="muted" style="color:#cbd5e1;">运营管理</div>
+            </div>
+        </div>
+        <a class="nav-link" href="#dashboard">概览</a>
+        <a class="nav-link" href="#items">商品管理</a>
+        <a class="nav-link" href="#orders">订单管理</a>
+        <a class="nav-link" href="#users">用户积分</a>
+    </aside>
+    <main class="main">
+        <div class="topbar">
+            <div>
+                <h1 class="headline">运营后台</h1>
+                <div class="muted" id="adminProfile">加载中...</div>
+            </div>
+            <button class="btn btn-secondary" id="logoutBtn">退出登录</button>
+        </div>
+
+        <section id="dashboard" class="grid cards" style="margin-bottom:24px;">
+            <div class="card">
+                <div class="muted">用户数</div>
+                <div class="metric" id="userCount">0</div>
+            </div>
+            <div class="card">
+                <div class="muted">商品数</div>
+                <div class="metric" id="itemCount">0</div>
+            </div>
+            <div class="card">
+                <div class="muted">订单数</div>
+                <div class="metric" id="orderCount">0</div>
+            </div>
+        </section>
+
+        <section id="items" class="card" style="margin-bottom:24px;">
+            <div class="section-head">
+                <h2 style="margin:0;">商品管理</h2>
+            </div>
+            <div class="grid cards" style="grid-template-columns: 1.2fr 1fr; align-items:start;">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>商品</th>
+                            <th>积分</th>
+                            <th>库存</th>
+                            <th>状态</th>
+                        </tr>
+                        </thead>
+                        <tbody id="itemTable"></tbody>
+                    </table>
+                </div>
+                <div>
+                    <div class="form-group">
+                        <label>商品名称</label>
+                        <input id="itemName" placeholder="如：定制礼品卡">
+                    </div>
+                    <div class="form-group">
+                        <label>商品描述</label>
+                        <textarea id="itemDesc" placeholder="请输入商品描述"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>兑换积分</label>
+                        <input id="itemPoints" type="number" value="199">
+                    </div>
+                    <div class="form-group">
+                        <label>库存</label>
+                        <input id="itemStock" type="number" value="20">
+                    </div>
+                    <div class="form-group">
+                        <label>封面图</label>
+                        <input id="itemCover" value="/res/default/bg/image/banner/3.png">
+                    </div>
+                    <div class="form-group">
+                        <label>排序</label>
+                        <input id="itemSort" type="number" value="10">
+                    </div>
+                    <button class="btn btn-primary" id="saveItemBtn">新增商品</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="orders" class="card" style="margin-bottom:24px;">
+            <div class="section-head">
+                <h2 style="margin:0;">订单管理</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>订单号</th>
+                        <th>用户</th>
+                        <th>商品</th>
+                        <th>积分</th>
+                        <th>状态</th>
+                        <th>收货信息</th>
+                        <th>操作</th>
+                    </tr>
+                    </thead>
+                    <tbody id="orderTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="users" class="card">
+            <div class="section-head">
+                <h2 style="margin:0;">用户积分管理</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>用户</th>
+                        <th>账号</th>
+                        <th>角色</th>
+                        <th>当前积分</th>
+                        <th>操作</th>
+                    </tr>
+                    </thead>
+                    <tbody id="userTable"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+<script src="/js/http.js"></script>
+<script>
+    async function loadAdminPage() {
+        const me = await api("/api/auth/me");
+        if (me.role !== "ADMIN") {
+            location.href = "/app/index.html";
+            return;
+        }
+        document.getElementById("adminProfile").textContent = `${me.displayName} / ${me.username}`;
+
+        const [summary, items, orders, users] = await Promise.all([
+            api("/api/admin/summary"),
+            api("/api/admin/items"),
+            api("/api/admin/orders"),
+            api("/api/admin/users")
+        ]);
+
+        document.getElementById("userCount").textContent = summary.userCount;
+        document.getElementById("itemCount").textContent = summary.itemCount;
+        document.getElementById("orderCount").textContent = summary.orderCount;
+
+        document.getElementById("itemTable").innerHTML = items.map(item => `
+            <tr>
+                <td>${item.id}</td>
+                <td>${escapeHtml(item.name)}</td>
+                <td>${item.pointsCost}</td>
+                <td>${item.stock}</td>
+                <td>${item.active ? "上架" : "下架"}</td>
+            </tr>
+        `).join("") || '<tr><td colspan="5">暂无商品</td></tr>';
+
+        document.getElementById("orderTable").innerHTML = orders.map(order => `
+            <tr>
+                <td>${escapeHtml(order.orderNo)}</td>
+                <td>${escapeHtml(order.userName)}</td>
+                <td>${escapeHtml(order.itemName)}</td>
+                <td>${order.totalPoints}</td>
+                <td>${escapeHtml(order.status)}</td>
+                <td>${escapeHtml(order.recipientName)} / ${escapeHtml(order.phone)}</td>
+                <td>${order.status === "CREATED" ? `<button class="btn btn-success" onclick="fulfillOrder(${order.id})">发货完成</button>` : "-"}</td>
+            </tr>
+        `).join("") || '<tr><td colspan="7">暂无订单</td></tr>';
+
+        document.getElementById("userTable").innerHTML = users.map(user => `
+            <tr>
+                <td>${escapeHtml(user.displayName)}</td>
+                <td>${escapeHtml(user.username)}</td>
+                <td>${escapeHtml(user.role)}</td>
+                <td>${user.pointsBalance}</td>
+                <td>${user.role === "USER" ? `<button class="btn btn-primary" onclick="adjustPoints(${user.id})">调整积分</button>` : "-"}</td>
+            </tr>
+        `).join("") || '<tr><td colspan="5">暂无用户</td></tr>';
+    }
+
+    async function fulfillOrder(orderId) {
+        try {
+            await api(`/api/admin/orders/${orderId}/fulfill`, { method: "POST" });
+            await loadAdminPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    async function adjustPoints(userId) {
+        const delta = prompt("请输入调整积分，支持负数：", "100");
+        if (delta === null) {
+            return;
+        }
+        const note = prompt("请输入备注：", "运营补发积分");
+        try {
+            await api(`/api/admin/users/${userId}/points-adjust`, {
+                method: "POST",
+                body: JSON.stringify({ delta: Number(delta), note: note || "后台调整" })
+            });
+            await loadAdminPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    document.getElementById("saveItemBtn").addEventListener("click", async () => {
+        try {
+            await api("/api/admin/items", {
+                method: "POST",
+                body: JSON.stringify({
+                    name: document.getElementById("itemName").value.trim(),
+                    description: document.getElementById("itemDesc").value.trim(),
+                    pointsCost: Number(document.getElementById("itemPoints").value),
+                    stock: Number(document.getElementById("itemStock").value),
+                    coverImage: document.getElementById("itemCover").value.trim(),
+                    active: true,
+                    sortOrder: Number(document.getElementById("itemSort").value)
+                })
+            });
+            ["itemName", "itemDesc"].forEach(id => document.getElementById(id).value = "");
+            await loadAdminPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+        await api("/api/auth/logout", { method: "POST" });
+        location.href = "/admin/login.html";
+    });
+
+    loadAdminPage().catch(() => {
+        location.href = "/admin/login.html";
+    });
+</script>
+</body>
+</html>
