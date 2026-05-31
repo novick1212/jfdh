@@ -135,6 +135,15 @@
                     <tbody id="userTable"></tbody>
                 </table>
             </div>
+            <div style="margin-top:16px; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+                <div class="form-group" style="margin:0; min-width:320px;">
+                    <label>导入用户（CSV）</label>
+                    <input type="file" id="userImportFile" accept=".csv,text/csv">
+                    <div class="muted" style="margin-top:6px;">格式：手机号,用户名,姓名（可带表头；用户名/姓名可空）</div>
+                </div>
+                <button class="btn btn-secondary" id="importUsersBtn">导入</button>
+                <div class="muted" id="importUsersResult" style="min-height:20px;"></div>
+            </div>
         </section>
     </main>
 </div>
@@ -230,6 +239,35 @@
             alert(e.message);
         }
     }
+
+    document.getElementById("importUsersBtn").addEventListener("click", async () => {
+        const fileInput = document.getElementById("userImportFile");
+        const resultEl = document.getElementById("importUsersResult");
+        resultEl.textContent = "";
+        if (!fileInput.files || fileInput.files.length === 0) {
+            resultEl.textContent = "请先选择 CSV 文件";
+            return;
+        }
+        const file = fileInput.files[0];
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+            const response = await fetch("/api/admin/users/import-csv", {
+                method: "POST",
+                credentials: "include",
+                body: formData
+            });
+            const payload = await response.json().catch(() => ({ success: false, message: "响应解析失败" }));
+            if (!response.ok || payload.success === false) {
+                throw new Error(payload.message || "导入失败");
+            }
+            const data = payload.data || {};
+            resultEl.textContent = `已导入：新增 ${data.created ?? 0}，更新 ${data.updated ?? 0}，错误 ${data.errorCount ?? 0}`;
+            await loadAdminPage();
+        } catch (e) {
+            resultEl.textContent = e.message;
+        }
+    });
 
     document.getElementById("saveItemBtn").addEventListener("click", async () => {
         try {

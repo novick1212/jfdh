@@ -2,17 +2,21 @@ package com.novick.points.web.admin;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.nio.charset.StandardCharsets;
 
 import javax.servlet.http.HttpSession;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -85,6 +89,68 @@ public class AdminController {
             @Valid @RequestBody AdjustPointsRequest request, HttpSession session) {
         sessionAuthService.requireRole(session, UserRole.ADMIN);
         return ApiResponse.success("积分已调整", mallService.adjustPoints(id, request.getDelta(), request.getNote()));
+    }
+
+    @PostMapping("/users/import-csv")
+    public ApiResponse<Map<String, Object>> importUsersCsv(@RequestParam("file") MultipartFile file, HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        if (file == null || file.isEmpty()) {
+            return ApiResponse.failure("请选择 CSV 文件");
+        }
+        try {
+            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            List<MallService.UserImportCommand> users = parseCsv(content);
+            return ApiResponse.success("导入完成", mallService.importUsers(users));
+        } catch (Exception e) {
+            return ApiResponse.failure("导入失败：" + e.getMessage());
+        }
+    }
+
+    private List<MallService.UserImportCommand> parseCsv(String content) {
+        if (content == null) {
+            return List.of();
+        }
+        List<String> lines = content.lines()
+                .map(line -> line == null ? "" : line.trim())
+                .filter(line -> !line.isBlank())
+                .collect(Collectors.toList());
+        if (lines.isEmpty()) {
+            return List.of();
+        }
+
+        int startIndex = 0;
+        String first = lines.get(0).replace("\uFEFF", "");
+        if (looksLikeHeader(first)) {
+            startIndex = 1;
+        }
+
+        int startLineNo = startIndex + 1;
+        List<String> dataLines = lines.subList(startIndex, lines.size());
+        return java.util.stream.IntStream.range(0, dataLines.size()).mapToObj(i -> {
+            int lineNo = startLineNo + i;
+            String raw = dataLines.get(i);
+
+            String normalized = raw.replace('\uFEFF', ' ').trim().replace('，', ',');
+            String[] parts = normalized.split("\\s*,\\s*", -1);
+            MallService.UserImportCommand cmd = new MallService.UserImportCommand();
+            cmd.setLineNo(lineNo);
+            cmd.setRaw(raw);
+            if (parts.length >= 1) {
+                cmd.setPhoneNumber(parts[0]);
+            }
+            if (parts.length >= 2) {
+                cmd.setUsername(parts[1]);
+            }
+            if (parts.length >= 3) {
+                cmd.setDisplayName(parts[2]);
+            }
+            return cmd;
+        }).collect(Collectors.toList());
+    }
+
+    private boolean looksLikeHeader(String line) {
+        String normalized = (line == null ? "" : line).toLowerCase();
+        return normalized.contains("phone") || normalized.contains("手机号") || normalized.contains("username") || normalized.contains("用户名");
     }
 
     public static class SaveItemRequest {

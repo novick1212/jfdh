@@ -2,9 +2,11 @@ package com.novick.points.service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import javax.transaction.Transactional;
@@ -18,6 +20,7 @@ import com.novick.points.domain.PointsTransaction;
 import com.novick.points.domain.RewardItem;
 import com.novick.points.domain.TransactionType;
 import com.novick.points.domain.UserAccount;
+import com.novick.points.domain.UserRole;
 import com.novick.points.repository.ExchangeOrderRepository;
 import com.novick.points.repository.PointsTransactionRepository;
 import com.novick.points.repository.RewardItemRepository;
@@ -33,13 +36,16 @@ public class MallService {
     private final ExchangeOrderRepository exchangeOrderRepository;
     private final PointsTransactionRepository pointsTransactionRepository;
     private final UserAccountRepository userAccountRepository;
+    private final AuthService authService;
 
     public MallService(RewardItemRepository rewardItemRepository, ExchangeOrderRepository exchangeOrderRepository,
-            PointsTransactionRepository pointsTransactionRepository, UserAccountRepository userAccountRepository) {
+            PointsTransactionRepository pointsTransactionRepository, UserAccountRepository userAccountRepository,
+            AuthService authService) {
         this.rewardItemRepository = rewardItemRepository;
         this.exchangeOrderRepository = exchangeOrderRepository;
         this.pointsTransactionRepository = pointsTransactionRepository;
         this.userAccountRepository = userAccountRepository;
+        this.authService = authService;
     }
 
     public Map<String, Object> appHome(SessionPrincipal principal) {
@@ -195,6 +201,79 @@ public class MallService {
     }
 
     @Transactional
+    public Map<String, Object> importUsers(List<UserImportCommand> users) {
+        if (users == null || users.isEmpty()) {
+            throw new BusinessException("导入数据为空");
+        }
+
+        List<Map<String, Object>> errors = new ArrayList<>();
+        int created = 0;
+        int updated = 0;
+
+        for (UserImportCommand command : users) {
+            if (command == null) {
+                continue;
+            }
+            String phone = command.getPhoneNumber() == null ? "" : command.getPhoneNumber().trim();
+            if (!phone.matches("^1\\d{10}$")) {
+                errors.add(errorMap(command.getLineNo(), command.getRaw(), "手机号格式不正确"));
+                continue;
+            }
+            String username = command.getUsername() == null ? "" : command.getUsername().trim();
+            if (username.isBlank()) {
+                username = phone;
+            }
+            if (username.length() > 50) {
+                errors.add(errorMap(command.getLineNo(), command.getRaw(), "用户名过长"));
+                continue;
+            }
+            String displayName = command.getDisplayName() == null ? "" : command.getDisplayName().trim();
+            if (displayName.isBlank()) {
+                displayName = username;
+            }
+            if (displayName.length() > 50) {
+                errors.add(errorMap(command.getLineNo(), command.getRaw(), "姓名过长"));
+                continue;
+            }
+
+            UserAccount byUsername = userAccountRepository.findByUsername(username).orElse(null);
+            if (byUsername != null && (byUsername.getPhoneNumber() == null || !byUsername.getPhoneNumber().equals(phone))) {
+                errors.add(errorMap(command.getLineNo(), command.getRaw(), "用户名已被其它手机号占用"));
+                continue;
+            }
+
+            UserAccount user = userAccountRepository.findByPhoneNumber(phone).orElse(null);
+            if (user == null) {
+                user = new UserAccount();
+                user.setUsername(username);
+                user.setPhoneNumber(phone);
+                user.setDisplayName(displayName);
+                user.setRole(UserRole.USER);
+                user.setEnabled(true);
+                user.setPointsBalance(0);
+                user.setPasswordHash(authService.encode("P" + UUID.randomUUID().toString().replace("-", "")));
+                userAccountRepository.save(user);
+                created++;
+            } else {
+                user.setUsername(username);
+                user.setDisplayName(displayName);
+                if (!user.isEnabled()) {
+                    user.setEnabled(true);
+                }
+                userAccountRepository.save(user);
+                updated++;
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("created", created);
+        result.put("updated", updated);
+        result.put("errorCount", errors.size());
+        result.put("errors", errors);
+        return result;
+    }
+
+    @Transactional
     public Map<String, Object> adjustPoints(Long userId, Integer delta, String note) {
         if (delta == null || delta == 0) {
             throw new BusinessException("调整积分不能为 0");
@@ -208,6 +287,14 @@ public class MallService {
         userAccountRepository.save(user);
         recordTransaction(user, TransactionType.ADJUST, delta, "后台调整", note == null ? "后台调整积分" : note);
         return toUserMap(user);
+    }
+
+    private Map<String, Object> errorMap(Integer lineNo, String raw, String message) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("lineNo", lineNo);
+        data.put("raw", raw == null ? "" : raw);
+        data.put("message", message);
+        return data;
     }
 
     private UserAccount getUser(Long userId) {
@@ -413,6 +500,54 @@ public class MallService {
 
         public void setSortOrder(Integer sortOrder) {
             this.sortOrder = sortOrder;
+        }
+    }
+
+    public static class UserImportCommand {
+        private Integer lineNo;
+        private String raw;
+        private String phoneNumber;
+        private String username;
+        private String displayName;
+
+        public Integer getLineNo() {
+            return lineNo;
+        }
+
+        public void setLineNo(Integer lineNo) {
+            this.lineNo = lineNo;
+        }
+
+        public String getRaw() {
+            return raw;
+        }
+
+        public void setRaw(String raw) {
+            this.raw = raw;
+        }
+
+        public String getPhoneNumber() {
+            return phoneNumber;
+        }
+
+        public void setPhoneNumber(String phoneNumber) {
+            this.phoneNumber = phoneNumber;
+        }
+
+        public String getUsername() {
+            return username;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        public void setDisplayName(String displayName) {
+            this.displayName = displayName;
         }
     }
 }
