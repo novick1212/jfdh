@@ -219,35 +219,53 @@ public class MallService {
                 errors.add(errorMap(command.getLineNo(), command.getRaw(), "手机号格式不正确"));
                 continue;
             }
-            String username = command.getUsername() == null ? "" : command.getUsername().trim();
-            if (username.isBlank()) {
-                username = phone;
-            }
-            if (username.length() > 50) {
-                errors.add(errorMap(command.getLineNo(), command.getRaw(), "用户名过长"));
-                continue;
-            }
             String displayName = command.getDisplayName() == null ? "" : command.getDisplayName().trim();
             if (displayName.isBlank()) {
-                displayName = username;
+                errors.add(errorMap(command.getLineNo(), command.getRaw(), "姓名不能为空"));
+                continue;
             }
             if (displayName.length() > 50) {
                 errors.add(errorMap(command.getLineNo(), command.getRaw(), "姓名过长"));
                 continue;
             }
 
-            UserAccount byUsername = userAccountRepository.findByUsername(username).orElse(null);
-            if (byUsername != null && (byUsername.getPhoneNumber() == null || !byUsername.getPhoneNumber().equals(phone))) {
-                errors.add(errorMap(command.getLineNo(), command.getRaw(), "用户名已被其它手机号占用"));
+            String hrCode = command.getHrCode() == null ? "" : command.getHrCode().trim();
+            if (hrCode.isBlank()) {
+                errors.add(errorMap(command.getLineNo(), command.getRaw(), "人力资源码不能为空"));
+                continue;
+            }
+            if (hrCode.length() > 50) {
+                errors.add(errorMap(command.getLineNo(), command.getRaw(), "人力资源码过长"));
                 continue;
             }
 
             UserAccount user = userAccountRepository.findByPhoneNumber(phone).orElse(null);
+            UserAccount byHrCode = userAccountRepository.findByHrCode(hrCode).orElse(null);
+            if (byHrCode != null && (user == null || !byHrCode.getId().equals(user.getId()))) {
+                errors.add(errorMap(command.getLineNo(), command.getRaw(), "人力资源码已被其它用户占用"));
+                continue;
+            }
+
             if (user == null) {
+                String username = command.getUsername() == null ? "" : command.getUsername().trim();
+                if (username.isBlank()) {
+                    username = phone;
+                }
+                if (username.length() > 50) {
+                    errors.add(errorMap(command.getLineNo(), command.getRaw(), "用户名过长"));
+                    continue;
+                }
+                UserAccount byUsername = userAccountRepository.findByUsername(username).orElse(null);
+                if (byUsername != null) {
+                    errors.add(errorMap(command.getLineNo(), command.getRaw(), "用户名已被其它手机号占用"));
+                    continue;
+                }
+
                 user = new UserAccount();
                 user.setUsername(username);
                 user.setPhoneNumber(phone);
                 user.setDisplayName(displayName);
+                user.setHrCode(hrCode);
                 user.setRole(UserRole.USER);
                 user.setEnabled(true);
                 user.setPointsBalance(0);
@@ -255,8 +273,21 @@ public class MallService {
                 userAccountRepository.save(user);
                 created++;
             } else {
-                user.setUsername(username);
+                String username = command.getUsername() == null ? "" : command.getUsername().trim();
+                if (!username.isBlank()) {
+                    if (username.length() > 50) {
+                        errors.add(errorMap(command.getLineNo(), command.getRaw(), "用户名过长"));
+                        continue;
+                    }
+                    UserAccount byUsername = userAccountRepository.findByUsername(username).orElse(null);
+                    if (byUsername != null && !byUsername.getId().equals(user.getId())) {
+                        errors.add(errorMap(command.getLineNo(), command.getRaw(), "用户名已被其它手机号占用"));
+                        continue;
+                    }
+                    user.setUsername(username);
+                }
                 user.setDisplayName(displayName);
+                user.setHrCode(hrCode);
                 if (!user.isEnabled()) {
                     user.setEnabled(true);
                 }
@@ -374,6 +405,8 @@ public class MallService {
         data.put("id", user.getId());
         data.put("username", user.getUsername());
         data.put("displayName", user.getDisplayName());
+        data.put("phoneNumber", user.getPhoneNumber());
+        data.put("hrCode", user.getHrCode());
         data.put("role", user.getRole());
         data.put("pointsBalance", user.getPointsBalance());
         data.put("enabled", user.isEnabled());
@@ -509,6 +542,7 @@ public class MallService {
         private String phoneNumber;
         private String username;
         private String displayName;
+        private String hrCode;
 
         public Integer getLineNo() {
             return lineNo;
@@ -548,6 +582,14 @@ public class MallService {
 
         public void setDisplayName(String displayName) {
             this.displayName = displayName;
+        }
+
+        public String getHrCode() {
+            return hrCode;
+        }
+
+        public void setHrCode(String hrCode) {
+            this.hrCode = hrCode;
         }
     }
 }

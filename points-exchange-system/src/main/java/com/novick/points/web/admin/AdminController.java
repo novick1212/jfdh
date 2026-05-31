@@ -124,6 +124,7 @@ public class AdminController {
             startIndex = 1;
         }
 
+        boolean hrMode = looksLikeHrMode(first);
         int startLineNo = startIndex + 1;
         List<String> dataLines = lines.subList(startIndex, lines.size());
         return java.util.stream.IntStream.range(0, dataLines.size()).mapToObj(i -> {
@@ -135,14 +136,30 @@ public class AdminController {
             MallService.UserImportCommand cmd = new MallService.UserImportCommand();
             cmd.setLineNo(lineNo);
             cmd.setRaw(raw);
-            if (parts.length >= 1) {
-                cmd.setPhoneNumber(parts[0]);
-            }
-            if (parts.length >= 2) {
-                cmd.setUsername(parts[1]);
-            }
-            if (parts.length >= 3) {
-                cmd.setDisplayName(parts[2]);
+            boolean smartHrMode = hrMode || (parts.length >= 3 && isPhone(parts[1]) && !isPhone(parts[0]));
+            if (smartHrMode) {
+                if (parts.length >= 1) {
+                    cmd.setDisplayName(parts[0]);
+                }
+                if (parts.length >= 2) {
+                    cmd.setPhoneNumber(parts[1]);
+                }
+                if (parts.length >= 3) {
+                    cmd.setHrCode(parts[2]);
+                }
+            } else {
+                if (parts.length >= 1) {
+                    cmd.setPhoneNumber(parts[0]);
+                }
+                if (parts.length >= 2) {
+                    cmd.setUsername(parts[1]);
+                }
+                if (parts.length >= 3) {
+                    cmd.setDisplayName(parts[2]);
+                }
+                if (parts.length >= 4) {
+                    cmd.setHrCode(parts[3]);
+                }
             }
             return cmd;
         }).collect(Collectors.toList());
@@ -150,7 +167,20 @@ public class AdminController {
 
     private boolean looksLikeHeader(String line) {
         String normalized = (line == null ? "" : line).toLowerCase();
-        return normalized.contains("phone") || normalized.contains("手机号") || normalized.contains("username") || normalized.contains("用户名");
+        return normalized.contains("phone") || normalized.contains("手机号") || normalized.contains("username")
+                || normalized.contains("用户名") || normalized.contains("hr") || normalized.contains("人力");
+    }
+
+    private boolean looksLikeHrMode(String line) {
+        String normalized = (line == null ? "" : line).toLowerCase();
+        return normalized.contains("hr") || normalized.contains("人力");
+    }
+
+    private boolean isPhone(String value) {
+        if (value == null) {
+            return false;
+        }
+        return value.trim().matches("^1\\d{10}$");
     }
 
     public static class SaveItemRequest {

@@ -10,10 +10,18 @@
 <div class="login-card">
     <img src="/res/default/bg/image/icon/logo.png" alt="logo">
     <h1>积分兑换系统</h1>
-    <p>用户端使用手机号 + 短信验证码登录，可查询积分、兑换商品、查看订单和流水</p>
+    <p>请输入姓名、手机号、人力资源码校验后获取验证码登录</p>
+    <div class="form-group">
+        <label for="displayName">姓名</label>
+        <input id="displayName" value="演示用户" autocomplete="name">
+    </div>
     <div class="form-group">
         <label for="phoneNumber">手机号</label>
         <input id="phoneNumber" value="13800000000" autocomplete="tel">
+    </div>
+    <div class="form-group">
+        <label for="hrCode">人力资源码</label>
+        <input id="hrCode" value="HR0001" autocomplete="off">
     </div>
     <div class="form-group">
         <label for="smsCode">短信验证码</label>
@@ -38,7 +46,9 @@
             const data = await api("/api/auth/sms-code", {
                 method: "POST",
                 body: JSON.stringify({
-                    phoneNumber: document.getElementById("phoneNumber").value.trim()
+                    displayName: document.getElementById("displayName").value.trim(),
+                    phoneNumber: document.getElementById("phoneNumber").value.trim(),
+                    hrCode: document.getElementById("hrCode").value.trim()
                 })
             });
             if (data.debugCode) {

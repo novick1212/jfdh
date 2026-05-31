@@ -44,7 +44,7 @@ public class AuthController {
 
     @PostMapping("/sms-code")
     public ApiResponse<Map<String, Object>> sendSmsCode(@Valid @RequestBody SmsCodeRequest request) {
-        authService.assertSmsLoginUser(request.getPhoneNumber());
+        authService.assertSmsLoginUser(request.getPhoneNumber(), request.getDisplayName(), request.getHrCode());
         return ApiResponse.success("验证码已发送", smsCodeService.sendCode(request.getPhoneNumber()));
     }
 
@@ -93,9 +93,23 @@ public class AuthController {
     }
 
     public static class SmsCodeRequest {
+        @NotBlank(message = "请输入姓名")
+        private String displayName;
+
         @NotBlank(message = "请输入手机号")
         @Pattern(regexp = "^1\\d{10}$", message = "请输入正确的手机号")
         private String phoneNumber;
+
+        @NotBlank(message = "请输入人力资源码")
+        private String hrCode;
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        public void setDisplayName(String displayName) {
+            this.displayName = displayName;
+        }
 
         public String getPhoneNumber() {
             return phoneNumber;
@@ -103,6 +117,14 @@ public class AuthController {
 
         public void setPhoneNumber(String phoneNumber) {
             this.phoneNumber = phoneNumber;
+        }
+
+        public String getHrCode() {
+            return hrCode;
+        }
+
+        public void setHrCode(String hrCode) {
+            this.hrCode = hrCode;
         }
     }
 

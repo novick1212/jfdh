@@ -39,10 +39,20 @@ public class AuthService {
         return new SessionPrincipal(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole());
     }
 
-    public void assertSmsLoginUser(String phoneNumber) {
+    public void assertSmsLoginUser(String phoneNumber, String displayName, String hrCode) {
         UserAccount user = userAccountRepository.findByPhoneNumber(phoneNumber)
                 .orElseThrow(() -> new BusinessException("手机号未绑定用户"));
         assertUserEnabled(user);
+        String expectedName = user.getDisplayName() == null ? "" : user.getDisplayName().trim();
+        String expectedHr = user.getHrCode() == null ? "" : user.getHrCode().trim();
+        if (expectedName.isBlank() || expectedHr.isBlank()) {
+            throw new BusinessException("用户信息未导入完整，请联系管理员");
+        }
+        String actualName = displayName == null ? "" : displayName.trim();
+        String actualHr = hrCode == null ? "" : hrCode.trim();
+        if (!expectedName.equals(actualName) || !expectedHr.equals(actualHr)) {
+            throw new BusinessException("姓名或人力资源码不匹配");
+        }
     }
 
     private void assertUserEnabled(UserAccount user) {

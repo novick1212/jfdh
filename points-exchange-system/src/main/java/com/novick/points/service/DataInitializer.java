@@ -50,6 +50,7 @@ public class DataInitializer implements CommandLineRunner {
             demoUser.setPasswordHash(authService.encode(appProperties.getSeedUserPassword()));
             demoUser.setDisplayName("演示用户");
             demoUser.setPhoneNumber(appProperties.getSeedUserPhone());
+            demoUser.setHrCode("HR0001");
             demoUser.setRole(UserRole.USER);
             demoUser.setPointsBalance(1200);
             userAccountRepository.save(demoUser);
@@ -68,8 +69,11 @@ public class DataInitializer implements CommandLineRunner {
         userAccountRepository.findByUsername(appProperties.getSeedUserUsername()).ifPresent(user -> {
             if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
                 user.setPhoneNumber(appProperties.getSeedUserPhone());
-                userAccountRepository.save(user);
             }
+            if (user.getHrCode() == null || user.getHrCode().isBlank()) {
+                user.setHrCode("HR0001");
+            }
+            userAccountRepository.save(user);
         });
 
         if (rewardItemRepository.count() == 0) {

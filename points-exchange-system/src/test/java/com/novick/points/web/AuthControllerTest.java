@@ -33,7 +33,7 @@ class AuthControllerTest {
     void shouldLoginBySmsCode() throws Exception {
         MvcResult sendCodeResult = mockMvc.perform(post("/api/auth/sms-code")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"phoneNumber\":\"13800000000\"}"))
+                        .content("{\"displayName\":\"演示用户\",\"phoneNumber\":\"13800000000\",\"hrCode\":\"HR0001\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.debugCode").exists())
