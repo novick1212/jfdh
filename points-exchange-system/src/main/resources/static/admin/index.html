@@ -19,7 +19,7 @@
         <a class="nav-link" href="#dashboard">概览</a>
         <a class="nav-link" href="#items">商品管理</a>
         <a class="nav-link" href="#orders">订单管理</a>
-        <a class="nav-link" href="#users">用户积分</a>
+        <a class="nav-link" href="#users">用户次数</a>
     </aside>
     <main class="main">
         <div class="topbar">
@@ -56,7 +56,6 @@
                         <tr>
                             <th>ID</th>
                             <th>商品</th>
-                            <th>积分</th>
                             <th>库存</th>
                             <th>状态</th>
                         </tr>
@@ -72,10 +71,6 @@
                     <div class="form-group">
                         <label>商品描述</label>
                         <textarea id="itemDesc" placeholder="请输入商品描述"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>兑换积分</label>
-                        <input id="itemPoints" type="number" value="199">
                     </div>
                     <div class="form-group">
                         <label>库存</label>
@@ -105,7 +100,7 @@
                         <th>订单号</th>
                         <th>用户</th>
                         <th>商品</th>
-                        <th>积分</th>
+                        <th>次数</th>
                         <th>状态</th>
                         <th>收货信息</th>
                         <th>物流</th>
@@ -119,7 +114,7 @@
 
         <section id="users" class="card">
             <div class="section-head">
-                <h2 style="margin:0;">用户积分管理</h2>
+                <h2 style="margin:0;">用户兑换次数管理</h2>
             </div>
             <div class="table-wrap">
                 <table>
@@ -128,7 +123,9 @@
                         <th>用户</th>
                         <th>账号</th>
                         <th>角色</th>
-                        <th>当前积分</th>
+                        <th>可兑换次数</th>
+                        <th>已用</th>
+                        <th>剩余</th>
                         <th>操作</th>
                     </tr>
                     </thead>
@@ -172,18 +169,17 @@
             <tr>
                 <td>${item.id}</td>
                 <td>${escapeHtml(item.name)}</td>
-                <td>${item.pointsCost}</td>
                 <td>${item.stock}</td>
                 <td>${item.active ? "上架" : "下架"}</td>
             </tr>
-        `).join("") || '<tr><td colspan="5">暂无商品</td></tr>';
+        `).join("") || '<tr><td colspan="4">暂无商品</td></tr>';
 
         document.getElementById("orderTable").innerHTML = orders.map(order => `
             <tr>
                 <td>${escapeHtml(order.orderNo)}</td>
                 <td>${escapeHtml(order.userName)}</td>
                 <td>${escapeHtml(order.itemName)}</td>
-                <td>${order.totalPoints}</td>
+                <td>${order.quantity}</td>
                 <td>${escapeHtml(order.status)}</td>
                 <td>${escapeHtml(order.recipientName)} / ${escapeHtml(order.phone)}</td>
                 <td>${
@@ -200,10 +196,12 @@
                 <td>${escapeHtml(user.displayName)}</td>
                 <td>${escapeHtml(user.username)}</td>
                 <td>${escapeHtml(user.role)}</td>
-                <td>${user.pointsBalance}</td>
-                <td>${user.role === "USER" ? `<button class="btn btn-primary" onclick="adjustPoints(${user.id})">调整积分</button>` : "-"}</td>
+                <td>${user.redeemQuota ?? 0}</td>
+                <td>${user.redeemUsed ?? 0}</td>
+                <td>${user.redeemRemaining ?? 0}</td>
+                <td>${user.role === "USER" ? `<button class="btn btn-primary" onclick="setRedeemQuota(${user.id}, ${user.redeemQuota ?? 0})">设置次数</button>` : "-"}</td>
             </tr>
-        `).join("") || '<tr><td colspan="5">暂无用户</td></tr>';
+        `).join("") || '<tr><td colspan="7">暂无用户</td></tr>';
     }
 
     async function fulfillOrder(orderId) {
@@ -223,16 +221,15 @@
         }
     }
 
-    async function adjustPoints(userId) {
-        const delta = prompt("请输入调整积分，支持负数：", "100");
-        if (delta === null) {
+    async function setRedeemQuota(userId, currentQuota) {
+        const quota = prompt("请输入可兑换次数（总次数）：", String(currentQuota ?? 0));
+        if (quota === null) {
             return;
         }
-        const note = prompt("请输入备注：", "运营补发积分");
         try {
-            await api(`/api/admin/users/${userId}/points-adjust`, {
+            await api(`/api/admin/users/${userId}/redeem-quota`, {
                 method: "POST",
-                body: JSON.stringify({ delta: Number(delta), note: note || "后台调整" })
+                body: JSON.stringify({ quota: Number(quota) })
             });
             await loadAdminPage();
         } catch (e) {
@@ -276,7 +273,6 @@
                 body: JSON.stringify({
                     name: document.getElementById("itemName").value.trim(),
                     description: document.getElementById("itemDesc").value.trim(),
-                    pointsCost: Number(document.getElementById("itemPoints").value),
                     stock: Number(document.getElementById("itemStock").value),
                     coverImage: document.getElementById("itemCover").value.trim(),
                     active: true,

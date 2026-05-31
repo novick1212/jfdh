@@ -40,6 +40,12 @@ public class UserAccount {
     private Integer pointsBalance = 0;
 
     @Column(nullable = false)
+    private Integer redeemQuota = 0;
+
+    @Column(nullable = false)
+    private Integer redeemUsed = 0;
+
+    @Column(nullable = false)
     private boolean enabled = true;
 
     public Long getId() {
@@ -100,6 +106,22 @@ public class UserAccount {
 
     public void setPointsBalance(Integer pointsBalance) {
         this.pointsBalance = pointsBalance;
+    }
+
+    public Integer getRedeemQuota() {
+        return redeemQuota;
+    }
+
+    public void setRedeemQuota(Integer redeemQuota) {
+        this.redeemQuota = redeemQuota;
+    }
+
+    public Integer getRedeemUsed() {
+        return redeemUsed;
+    }
+
+    public void setRedeemUsed(Integer redeemUsed) {
+        this.redeemUsed = redeemUsed;
     }
 
     public boolean isEnabled() {

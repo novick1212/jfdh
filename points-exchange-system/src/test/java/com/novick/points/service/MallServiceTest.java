@@ -31,30 +31,30 @@ class MallServiceTest {
     private RewardItemRepository rewardItemRepository;
 
     @Test
-    void shouldCreateExchangeOrderAndDeductPoints() {
+    void shouldCreateExchangeOrderAndConsumeQuota() {
         Long userId = userAccountRepository.findByUsername("demo").orElseThrow().getId();
         Long itemId = rewardItemRepository.findByActiveTrueOrderBySortOrderAscIdDesc().get(0).getId();
 
         MallService.CreateOrderCommand command = new MallService.CreateOrderCommand();
         command.setItemId(itemId);
-        command.setQuantity(1);
+        command.setQuantity(2);
         command.setRecipientName("测试用户");
         command.setPhone("13800000000");
         command.setAddress("成都市高新区");
 
         mallService.createOrder(new SessionPrincipal(userId, "demo", "演示用户", UserRole.USER), command);
 
-        assertEquals(901, userAccountRepository.findById(userId).orElseThrow().getPointsBalance());
+        assertEquals(2, userAccountRepository.findById(userId).orElseThrow().getRedeemUsed());
     }
 
     @Test
-    void shouldRejectOrderWhenPointsInsufficient() {
+    void shouldRejectOrderWhenQuotaInsufficient() {
         Long userId = userAccountRepository.findByUsername("demo").orElseThrow().getId();
         Long itemId = rewardItemRepository.findByActiveTrueOrderBySortOrderAscIdDesc().get(2).getId();
 
         MallService.CreateOrderCommand command = new MallService.CreateOrderCommand();
         command.setItemId(itemId);
-        command.setQuantity(2);
+        command.setQuantity(4);
         command.setRecipientName("测试用户");
         command.setPhone("13800000000");
         command.setAddress("成都市高新区");

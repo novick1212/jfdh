@@ -57,7 +57,7 @@ public class AdminController {
         command.setId(request.getId());
         command.setName(request.getName());
         command.setDescription(request.getDescription());
-        command.setPointsCost(request.getPointsCost());
+        command.setPointsCost(0);
         command.setStock(request.getStock());
         command.setCoverImage(request.getCoverImage());
         command.setActive(request.isActive());
@@ -89,6 +89,13 @@ public class AdminController {
             @Valid @RequestBody AdjustPointsRequest request, HttpSession session) {
         sessionAuthService.requireRole(session, UserRole.ADMIN);
         return ApiResponse.success("积分已调整", mallService.adjustPoints(id, request.getDelta(), request.getNote()));
+    }
+
+    @PostMapping("/users/{id}/redeem-quota")
+    public ApiResponse<Map<String, Object>> setRedeemQuota(@PathVariable Long id,
+            @Valid @RequestBody SetRedeemQuotaRequest request, HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        return ApiResponse.success("兑换次数已设置", mallService.setRedeemQuota(id, request.getQuota()));
     }
 
     @PostMapping("/users/import-csv")
@@ -192,9 +199,6 @@ public class AdminController {
         @NotBlank(message = "请输入商品描述")
         private String description;
 
-        @NotNull(message = "请输入兑换积分")
-        private Integer pointsCost;
-
         @NotNull(message = "请输入库存")
         private Integer stock;
 
@@ -226,14 +230,6 @@ public class AdminController {
 
         public void setDescription(String description) {
             this.description = description;
-        }
-
-        public Integer getPointsCost() {
-            return pointsCost;
-        }
-
-        public void setPointsCost(Integer pointsCost) {
-            this.pointsCost = pointsCost;
         }
 
         public Integer getStock() {
@@ -289,6 +285,19 @@ public class AdminController {
 
         public void setNote(String note) {
             this.note = note;
+        }
+    }
+
+    public static class SetRedeemQuotaRequest {
+        @NotNull(message = "请输入兑换次数")
+        private Integer quota;
+
+        public Integer getQuota() {
+            return quota;
+        }
+
+        public void setQuota(Integer quota) {
+            this.quota = quota;
         }
     }
 

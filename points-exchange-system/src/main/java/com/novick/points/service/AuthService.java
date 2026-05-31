@@ -73,8 +73,12 @@ public class AuthService {
         data.put("username", user.getUsername());
         data.put("displayName", user.getDisplayName());
         data.put("phoneNumber", user.getPhoneNumber());
+        data.put("hrCode", user.getHrCode());
         data.put("role", user.getRole());
-        data.put("pointsBalance", user.getPointsBalance());
+        data.put("redeemQuota", user.getRedeemQuota());
+        data.put("redeemUsed", user.getRedeemUsed());
+        data.put("redeemRemaining", Math.max(0, (user.getRedeemQuota() == null ? 0 : user.getRedeemQuota())
+                - (user.getRedeemUsed() == null ? 0 : user.getRedeemUsed())));
         return data;
     }
 }

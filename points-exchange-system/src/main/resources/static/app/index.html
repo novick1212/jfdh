@@ -18,7 +18,7 @@
         </div>
         <a class="nav-link" href="#items">兑换商品</a>
         <a class="nav-link" href="#orders">我的订单</a>
-        <a class="nav-link" href="#transactions">积分流水</a>
+        <a class="nav-link" href="#profile">我的次数</a>
     </aside>
     <main class="main">
         <div class="topbar">
@@ -29,10 +29,10 @@
             <button class="btn btn-secondary" id="logoutBtn">退出登录</button>
         </div>
 
-        <section class="grid cards" style="margin-bottom:24px;">
+        <section id="profile" class="grid cards" style="margin-bottom:24px;">
             <div class="card">
-                <div class="muted">当前积分</div>
-                <div class="metric" id="pointsBalance">0</div>
+                <div class="muted">剩余兑换次数</div>
+                <div class="metric" id="redeemRemaining">0</div>
             </div>
             <div class="card">
                 <div class="muted">最近订单</div>
@@ -63,7 +63,7 @@
                         <th>订单号</th>
                         <th>商品</th>
                         <th>数量</th>
-                        <th>积分</th>
+                        <th>次数</th>
                         <th>状态</th>
                         <th>收货人</th>
                         <th>物流</th>
@@ -74,25 +74,7 @@
             </div>
         </section>
 
-        <section id="transactions" class="card">
-            <div class="section-head">
-                <h2 style="margin:0;">积分流水</h2>
-            </div>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                    <tr>
-                        <th>类型</th>
-                        <th>变动</th>
-                        <th>余额</th>
-                        <th>来源</th>
-                        <th>说明</th>
-                    </tr>
-                    </thead>
-                    <tbody id="transactionTable"></tbody>
-                </table>
-            </div>
-        </section>
+        
     </main>
 </div>
 
@@ -102,7 +84,7 @@
         const home = await api("/api/app/home");
         const profile = home.profile;
         document.getElementById("welcomeText").textContent = `${profile.displayName}，账号：${profile.username}`;
-        document.getElementById("pointsBalance").textContent = profile.pointsBalance;
+        document.getElementById("redeemRemaining").textContent = profile.redeemRemaining ?? 0;
         document.getElementById("orderCount").textContent = home.recentOrders.length;
         document.getElementById("itemCount").textContent = home.items.length;
 
@@ -112,7 +94,7 @@
                 <h3>${escapeHtml(item.name)}</h3>
                 <div class="muted">${escapeHtml(item.description)}</div>
                 <div class="meta">
-                    <span class="tag">${item.pointsCost} 积分</span>
+                    <span class="tag">消耗 1 次</span>
                     <span class="muted">库存 ${item.stock}</span>
                 </div>
                 <div class="form-group">
@@ -140,7 +122,7 @@
                 <td>${escapeHtml(order.orderNo)}</td>
                 <td>${escapeHtml(order.itemName)}</td>
                 <td>${order.quantity}</td>
-                <td>${order.totalPoints}</td>
+                <td>${order.quantity}</td>
                 <td>${escapeHtml(order.status)}</td>
                 <td>${escapeHtml(order.recipientName)}</td>
                 <td>${
@@ -150,16 +132,6 @@
                 }</td>
             </tr>
         `).join("") || '<tr><td colspan="7">暂无订单</td></tr>';
-
-        document.getElementById("transactionTable").innerHTML = home.transactions.map(tx => `
-            <tr>
-                <td>${escapeHtml(tx.type)}</td>
-                <td>${tx.changeAmount > 0 ? "+" : ""}${tx.changeAmount}</td>
-                <td>${tx.balanceAfter}</td>
-                <td>${escapeHtml(tx.source)}</td>
-                <td>${escapeHtml(tx.note)}</td>
-            </tr>
-        `).join("") || '<tr><td colspan="5">暂无流水</td></tr>';
     }
 
     async function redeem(itemId) {

@@ -59,10 +59,6 @@ public class MallService {
                 .limit(5)
                 .map(this::toOrderMap)
                 .collect(Collectors.toList()));
-        result.put("transactions", pointsTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
-                .limit(10)
-                .map(this::toTransactionMap)
-                .collect(Collectors.toList()));
         return result;
     }
 
@@ -98,12 +94,13 @@ public class MallService {
         if (item.getStock() < command.getQuantity()) {
             throw new BusinessException("库存不足");
         }
-        int totalPoints = item.getPointsCost() * command.getQuantity();
-        if (user.getPointsBalance() < totalPoints) {
-            throw new BusinessException("积分不足");
+        int nextUsed = (user.getRedeemUsed() == null ? 0 : user.getRedeemUsed()) + command.getQuantity();
+        int quota = user.getRedeemQuota() == null ? 0 : user.getRedeemQuota();
+        if (nextUsed > quota) {
+            throw new BusinessException("兑换次数已用完");
         }
 
-        user.setPointsBalance(user.getPointsBalance() - totalPoints);
+        user.setRedeemUsed(nextUsed);
         item.setStock(item.getStock() - command.getQuantity());
 
         ExchangeOrder order = new ExchangeOrder();
@@ -112,8 +109,8 @@ public class MallService {
         order.setItemId(item.getId());
         order.setItemName(item.getName());
         order.setQuantity(command.getQuantity());
-        order.setPointsCost(item.getPointsCost());
-        order.setTotalPoints(totalPoints);
+        order.setPointsCost(0);
+        order.setTotalPoints(0);
         order.setStatus(OrderStatus.CREATED);
         order.setRecipientName(command.getRecipientName());
         order.setPhone(command.getPhone());
@@ -124,7 +121,6 @@ public class MallService {
         userAccountRepository.save(user);
         rewardItemRepository.save(item);
         exchangeOrderRepository.save(order);
-        recordTransaction(user, TransactionType.REDEEM, -totalPoints, "订单兑换", "兑换商品 " + item.getName());
         return toOrderMap(order);
     }
 
@@ -152,7 +148,7 @@ public class MallService {
                 : rewardItemRepository.findById(command.getId()).orElseThrow(() -> new BusinessException("商品不存在"));
         item.setName(command.getName());
         item.setDescription(command.getDescription());
-        item.setPointsCost(command.getPointsCost());
+        item.setPointsCost(0);
         item.setStock(command.getStock());
         item.setCoverImage(command.getCoverImage());
         item.setActive(command.isActive());
@@ -198,6 +194,20 @@ public class MallService {
                 .sorted((left, right) -> left.getId().compareTo(right.getId()))
                 .map(this::toUserMap)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public Map<String, Object> setRedeemQuota(Long userId, Integer quota) {
+        if (quota == null || quota < 0) {
+            throw new BusinessException("兑换次数必须大于等于 0");
+        }
+        UserAccount user = getUser(userId);
+        if (user.getRedeemUsed() != null && quota < user.getRedeemUsed()) {
+            throw new BusinessException("兑换次数不能小于已用次数");
+        }
+        user.setRedeemQuota(quota);
+        userAccountRepository.save(user);
+        return toUserMap(user);
     }
 
     @Transactional
@@ -355,7 +365,6 @@ public class MallService {
         data.put("id", item.getId());
         data.put("name", item.getName());
         data.put("description", item.getDescription());
-        data.put("pointsCost", item.getPointsCost());
         data.put("stock", item.getStock());
         data.put("coverImage", item.getCoverImage());
         data.put("active", item.isActive());
@@ -408,7 +417,9 @@ public class MallService {
         data.put("phoneNumber", user.getPhoneNumber());
         data.put("hrCode", user.getHrCode());
         data.put("role", user.getRole());
-        data.put("pointsBalance", user.getPointsBalance());
+        data.put("redeemQuota", user.getRedeemQuota());
+        data.put("redeemUsed", user.getRedeemUsed());
+        data.put("redeemRemaining", Math.max(0, user.getRedeemQuota() - user.getRedeemUsed()));
         data.put("enabled", user.isEnabled());
         return data;
     }
