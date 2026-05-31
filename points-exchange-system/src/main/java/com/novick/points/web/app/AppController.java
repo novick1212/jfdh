@@ -2,12 +2,14 @@ package com.novick.points.web.app;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.servlet.http.HttpSession;
 import javax.validation.Valid;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Size;
 
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -69,6 +71,22 @@ public class AppController {
         return ApiResponse.success("兑换成功", mallService.createOrder(principal, command));
     }
 
+    @PostMapping("/orders/checkout")
+    public ApiResponse<List<Map<String, Object>>> checkout(@Valid @RequestBody CheckoutRequest request, HttpSession session) {
+        SessionPrincipal principal = sessionAuthService.requireLogin(session);
+        MallService.CheckoutCommand command = new MallService.CheckoutCommand();
+        command.setRecipientName(request.getRecipientName());
+        command.setPhone(request.getPhone());
+        command.setAddress(request.getAddress());
+        command.setItems(request.getItems().stream().map(item -> {
+            MallService.CheckoutItemCommand c = new MallService.CheckoutItemCommand();
+            c.setItemId(item.getItemId());
+            c.setQuantity(item.getQuantity());
+            return c;
+        }).collect(Collectors.toList()));
+        return ApiResponse.success("下单成功", mallService.checkout(principal, command));
+    }
+
     public static class CreateOrderRequest {
         @NotNull(message = "请选择商品")
         private Long itemId;
@@ -124,6 +142,79 @@ public class AppController {
 
         public void setAddress(String address) {
             this.address = address;
+        }
+    }
+
+    public static class CheckoutRequest {
+        @NotNull(message = "购物车为空")
+        @Size(min = 1, message = "购物车为空")
+        @Valid
+        private List<CheckoutItemRequest> items;
+
+        @NotBlank(message = "请输入收货人")
+        private String recipientName;
+
+        @NotBlank(message = "请输入手机号")
+        private String phone;
+
+        @NotBlank(message = "请输入收货地址")
+        private String address;
+
+        public List<CheckoutItemRequest> getItems() {
+            return items;
+        }
+
+        public void setItems(List<CheckoutItemRequest> items) {
+            this.items = items;
+        }
+
+        public String getRecipientName() {
+            return recipientName;
+        }
+
+        public void setRecipientName(String recipientName) {
+            this.recipientName = recipientName;
+        }
+
+        public String getPhone() {
+            return phone;
+        }
+
+        public void setPhone(String phone) {
+            this.phone = phone;
+        }
+
+        public String getAddress() {
+            return address;
+        }
+
+        public void setAddress(String address) {
+            this.address = address;
+        }
+    }
+
+    public static class CheckoutItemRequest {
+        @NotNull(message = "请选择商品")
+        private Long itemId;
+
+        @NotNull(message = "请输入数量")
+        @Min(value = 1, message = "数量必须大于 0")
+        private Integer quantity;
+
+        public Long getItemId() {
+            return itemId;
+        }
+
+        public void setItemId(Long itemId) {
+            this.itemId = itemId;
+        }
+
+        public Integer getQuantity() {
+            return quantity;
+        }
+
+        public void setQuantity(Integer quantity) {
+            this.quantity = quantity;
         }
     }
 }

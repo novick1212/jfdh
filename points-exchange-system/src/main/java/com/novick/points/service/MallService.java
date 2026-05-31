@@ -124,6 +124,78 @@ public class MallService {
         return toOrderMap(order);
     }
 
+    @Transactional
+    public List<Map<String, Object>> checkout(SessionPrincipal principal, CheckoutCommand command) {
+        if (command == null || command.getItems() == null || command.getItems().isEmpty()) {
+            throw new BusinessException("购物车为空");
+        }
+        if (command.getRecipientName() == null || command.getRecipientName().trim().isEmpty()) {
+            throw new BusinessException("请输入收货人");
+        }
+        if (command.getPhone() == null || command.getPhone().trim().isEmpty()) {
+            throw new BusinessException("请输入手机号");
+        }
+        if (command.getAddress() == null || command.getAddress().trim().isEmpty()) {
+            throw new BusinessException("请输入收货地址");
+        }
+        UserAccount user = getUser(principal.getUserId());
+
+        List<CartItem> cartItems = new ArrayList<>();
+        int totalQuantity = 0;
+        for (CheckoutItemCommand itemCmd : command.getItems()) {
+            if (itemCmd == null || itemCmd.getItemId() == null) {
+                throw new BusinessException("请选择商品");
+            }
+            if (itemCmd.getQuantity() == null || itemCmd.getQuantity() < 1) {
+                throw new BusinessException("兑换数量必须大于 0");
+            }
+            RewardItem item = rewardItemRepository.findById(itemCmd.getItemId())
+                    .orElseThrow(() -> new BusinessException("兑换商品不存在"));
+            if (!item.isActive()) {
+                throw new BusinessException("商品已下架");
+            }
+            if (item.getStock() < itemCmd.getQuantity()) {
+                throw new BusinessException("库存不足：" + item.getName());
+            }
+            cartItems.add(new CartItem(item, itemCmd.getQuantity()));
+            totalQuantity += itemCmd.getQuantity();
+        }
+
+        int nextUsed = (user.getRedeemUsed() == null ? 0 : user.getRedeemUsed()) + totalQuantity;
+        int quota = user.getRedeemQuota() == null ? 0 : user.getRedeemQuota();
+        if (nextUsed > quota) {
+            throw new BusinessException("兑换次数已用完");
+        }
+
+        user.setRedeemUsed(nextUsed);
+        userAccountRepository.save(user);
+
+        List<Map<String, Object>> orders = new ArrayList<>();
+        for (CartItem cartItem : cartItems) {
+            RewardItem item = cartItem.item;
+            item.setStock(item.getStock() - cartItem.quantity);
+            rewardItemRepository.save(item);
+
+            ExchangeOrder order = new ExchangeOrder();
+            order.setOrderNo(generateOrderNo(user.getId()));
+            order.setUserId(user.getId());
+            order.setItemId(item.getId());
+            order.setItemName(item.getName());
+            order.setQuantity(cartItem.quantity);
+            order.setPointsCost(0);
+            order.setTotalPoints(0);
+            order.setStatus(OrderStatus.CREATED);
+            order.setRecipientName(command.getRecipientName());
+            order.setPhone(command.getPhone());
+            order.setAddress(command.getAddress());
+            order.setCreatedAt(LocalDateTime.now());
+            order.setUpdatedAt(LocalDateTime.now());
+            exchangeOrderRepository.save(order);
+            orders.add(toOrderMap(order));
+        }
+        return orders;
+    }
+
     public Map<String, Object> adminSummary() {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("userCount", userAccountRepository.count());
@@ -355,6 +427,16 @@ public class MallService {
         pointsTransactionRepository.save(transaction);
     }
 
+    private static class CartItem {
+        private final RewardItem item;
+        private final int quantity;
+
+        private CartItem(RewardItem item, int quantity) {
+            this.item = item;
+            this.quantity = quantity;
+        }
+    }
+
     private String generateOrderNo(Long userId) {
         long suffix = Math.abs(System.nanoTime() % 10000);
         return "JF" + LocalDateTime.now().format(ORDER_NO_FORMATTER) + String.format("%04d%04d", userId % 10000, suffix);
@@ -445,6 +527,66 @@ public class MallService {
 
         public void setQuantity(Integer quantity) {
             this.quantity = quantity;
+        }
+
+        public String getRecipientName() {
+            return recipientName;
+        }
+
+        public void setRecipientName(String recipientName) {
+            this.recipientName = recipientName;
+        }
+
+        public String getPhone() {
+            return phone;
+        }
+
+        public void setPhone(String phone) {
+            this.phone = phone;
+        }
+
+        public String getAddress() {
+            return address;
+        }
+
+        public void setAddress(String address) {
+            this.address = address;
+        }
+    }
+
+    public static class CheckoutItemCommand {
+        private Long itemId;
+        private Integer quantity;
+
+        public Long getItemId() {
+            return itemId;
+        }
+
+        public void setItemId(Long itemId) {
+            this.itemId = itemId;
+        }
+
+        public Integer getQuantity() {
+            return quantity;
+        }
+
+        public void setQuantity(Integer quantity) {
+            this.quantity = quantity;
+        }
+    }
+
+    public static class CheckoutCommand {
+        private List<CheckoutItemCommand> items;
+        private String recipientName;
+        private String phone;
+        private String address;
+
+        public List<CheckoutItemCommand> getItems() {
+            return items;
+        }
+
+        public void setItems(List<CheckoutItemCommand> items) {
+            this.items = items;
         }
 
         public String getRecipientName() {
