@@ -9,11 +9,14 @@ import org.springframework.stereotype.Service;
 
 import com.novick.points.common.BusinessException;
 import com.novick.points.domain.UserAccount;
+import com.novick.points.domain.UserRole;
 import com.novick.points.repository.UserAccountRepository;
 import com.novick.points.security.SessionPrincipal;
 
 @Service
 public class AuthService {
+
+    private static final int USER_REDEEM_LIMIT = 1;
 
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
@@ -68,17 +71,24 @@ public class AuthService {
     public Map<String, Object> profile(SessionPrincipal principal) {
         UserAccount user = userAccountRepository.findById(principal.getUserId())
                 .orElseThrow(() -> new BusinessException("用户不存在"));
+        int quota = user.getRole() == null || user.getRole() == UserRole.USER
+                ? USER_REDEEM_LIMIT
+                : (user.getRedeemQuota() == null ? 0 : user.getRedeemQuota());
+        int used = Math.min(USER_REDEEM_LIMIT, user.getRedeemUsed() == null ? 0 : user.getRedeemUsed());
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("id", user.getId());
         data.put("username", user.getUsername());
         data.put("displayName", user.getDisplayName());
         data.put("phoneNumber", user.getPhoneNumber());
         data.put("hrCode", user.getHrCode());
+        data.put("contactName", user.getContactName());
+        data.put("contactPhone", user.getContactPhone());
+        data.put("contactAddress", user.getContactAddress());
         data.put("role", user.getRole());
-        data.put("redeemQuota", user.getRedeemQuota());
-        data.put("redeemUsed", user.getRedeemUsed());
-        data.put("redeemRemaining", Math.max(0, (user.getRedeemQuota() == null ? 0 : user.getRedeemQuota())
-                - (user.getRedeemUsed() == null ? 0 : user.getRedeemUsed())));
+        data.put("redeemQuota", quota);
+        data.put("redeemUsed", used);
+        data.put("redeemRemaining", Math.max(0, quota - used));
+        data.put("hasRedeemed", used > 0);
         return data;
     }
 }

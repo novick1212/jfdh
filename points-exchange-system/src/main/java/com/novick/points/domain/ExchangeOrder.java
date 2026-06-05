@@ -62,6 +62,14 @@ public class ExchangeOrder {
     @Column(length = 255)
     private String trackingUrl;
 
+    @Column(length = 20)
+    private String trackingState;
+
+    @Column(columnDefinition = "TEXT")
+    private String trackingData;
+
+    private LocalDateTime trackingUpdatedAt;
+
     private LocalDateTime fulfilledAt;
 
     @Column(nullable = false)
@@ -184,6 +192,30 @@ public class ExchangeOrder {
 
     public void setTrackingUrl(String trackingUrl) {
         this.trackingUrl = trackingUrl;
+    }
+
+    public String getTrackingState() {
+        return trackingState;
+    }
+
+    public void setTrackingState(String trackingState) {
+        this.trackingState = trackingState;
+    }
+
+    public String getTrackingData() {
+        return trackingData;
+    }
+
+    public void setTrackingData(String trackingData) {
+        this.trackingData = trackingData;
+    }
+
+    public LocalDateTime getTrackingUpdatedAt() {
+        return trackingUpdatedAt;
+    }
+
+    public void setTrackingUpdatedAt(LocalDateTime trackingUpdatedAt) {
+        this.trackingUpdatedAt = trackingUpdatedAt;
     }
 
     public LocalDateTime getFulfilledAt() {

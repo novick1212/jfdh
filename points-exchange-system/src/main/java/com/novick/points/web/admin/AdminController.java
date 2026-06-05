@@ -4,15 +4,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 import javax.servlet.http.HttpSession;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -44,6 +50,22 @@ public class AdminController {
         return ApiResponse.success(mallService.adminSummary());
     }
 
+    @GetMapping("/site-config")
+    public ApiResponse<Map<String, Object>> siteConfig(HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        return ApiResponse.success(mallService.getSiteConfig());
+    }
+
+    @PostMapping("/site-config")
+    public ApiResponse<Map<String, Object>> saveSiteConfig(@Valid @RequestBody SaveSiteConfigRequest request, HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        MallService.SiteConfigCommand command = new MallService.SiteConfigCommand();
+        command.setAnnouncementHtml(request.getAnnouncementHtml());
+        command.setHeroImageUrl(request.getHeroImageUrl());
+        command.setHotline(request.getHotline());
+        return ApiResponse.success("保存成功", mallService.saveSiteConfig(command));
+    }
+
     @GetMapping("/items")
     public ApiResponse<List<Map<String, Object>>> items(HttpSession session) {
         sessionAuthService.requireRole(session, UserRole.ADMIN);
@@ -65,6 +87,13 @@ public class AdminController {
         return ApiResponse.success("保存成功", mallService.saveItem(command));
     }
 
+    @DeleteMapping("/items/{id}")
+    public ApiResponse<Void> deleteItem(@PathVariable Long id, HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        mallService.deleteItem(id);
+        return ApiResponse.success("删除成功", null);
+    }
+
     @GetMapping("/orders")
     public ApiResponse<List<Map<String, Object>>> orders(HttpSession session) {
         sessionAuthService.requireRole(session, UserRole.ADMIN);
@@ -82,6 +111,19 @@ public class AdminController {
     public ApiResponse<List<Map<String, Object>>> users(HttpSession session) {
         sessionAuthService.requireRole(session, UserRole.ADMIN);
         return ApiResponse.success(mallService.listUsers());
+    }
+
+    @GetMapping("/reports/redemption")
+    public ResponseEntity<byte[]> exportRedemptionReport(HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        byte[] bytes = mallService.exportRedemptionReportXlsx();
+
+        String filename = "redemption-report-" + LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE) + ".xlsx";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
+        return ResponseEntity.ok().headers(headers).body(bytes);
     }
 
     @PostMapping("/users/{id}/points-adjust")
@@ -262,6 +304,41 @@ public class AdminController {
 
         public void setSortOrder(Integer sortOrder) {
             this.sortOrder = sortOrder;
+        }
+    }
+
+    public static class SaveSiteConfigRequest {
+        @NotBlank(message = "请输入公告内容")
+        private String announcementHtml;
+
+        @NotBlank(message = "请输入活动图片地址")
+        private String heroImageUrl;
+
+        @NotBlank(message = "请输入客服热线")
+        private String hotline;
+
+        public String getAnnouncementHtml() {
+            return announcementHtml;
+        }
+
+        public void setAnnouncementHtml(String announcementHtml) {
+            this.announcementHtml = announcementHtml;
+        }
+
+        public String getHeroImageUrl() {
+            return heroImageUrl;
+        }
+
+        public void setHeroImageUrl(String heroImageUrl) {
+            this.heroImageUrl = heroImageUrl;
+        }
+
+        public String getHotline() {
+            return hotline;
+        }
+
+        public void setHotline(String hotline) {
+            this.hotline = hotline;
         }
     }
 

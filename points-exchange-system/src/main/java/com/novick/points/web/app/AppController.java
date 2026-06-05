@@ -13,6 +13,7 @@ import javax.validation.constraints.Size;
 
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -43,7 +44,8 @@ public class AppController {
     }
 
     @GetMapping("/items")
-    public ApiResponse<List<Map<String, Object>>> items() {
+    public ApiResponse<List<Map<String, Object>>> items(HttpSession session) {
+        sessionAuthService.requireLogin(session);
         return ApiResponse.success(mallService.listActiveItems());
     }
 
@@ -53,10 +55,26 @@ public class AppController {
         return ApiResponse.success(mallService.listUserOrders(principal.getUserId()));
     }
 
+    @GetMapping("/orders/{id}/tracking")
+    public ApiResponse<Map<String, Object>> orderTracking(@PathVariable Long id, HttpSession session) {
+        SessionPrincipal principal = sessionAuthService.requireLogin(session);
+        return ApiResponse.success(mallService.getOrderTracking(principal, id));
+    }
+
     @GetMapping("/transactions")
     public ApiResponse<List<Map<String, Object>>> transactions(HttpSession session) {
         SessionPrincipal principal = sessionAuthService.requireLogin(session);
         return ApiResponse.success(mallService.listUserTransactions(principal.getUserId()));
+    }
+
+    @PostMapping("/profile/contact")
+    public ApiResponse<Map<String, Object>> updateContact(@Valid @RequestBody UpdateContactRequest request, HttpSession session) {
+        SessionPrincipal principal = sessionAuthService.requireLogin(session);
+        MallService.ContactCommand command = new MallService.ContactCommand();
+        command.setContactName(request.getContactName());
+        command.setContactPhone(request.getContactPhone());
+        command.setContactAddress(request.getContactAddress());
+        return ApiResponse.success("保存成功", mallService.updateContactInfo(principal, command));
     }
 
     @PostMapping("/orders")
@@ -91,8 +109,6 @@ public class AppController {
         @NotNull(message = "请选择商品")
         private Long itemId;
 
-        @NotNull(message = "请输入数量")
-        @Min(value = 1, message = "数量必须大于 0")
         private Integer quantity;
 
         @NotBlank(message = "请输入收货人")
@@ -142,6 +158,42 @@ public class AppController {
 
         public void setAddress(String address) {
             this.address = address;
+        }
+    }
+
+    public static class UpdateContactRequest {
+        @NotBlank(message = "请输入收货人")
+        private String contactName;
+
+        @NotBlank(message = "请输入手机号")
+        @javax.validation.constraints.Pattern(regexp = "^1\\d{10}$", message = "请输入正确的手机号")
+        private String contactPhone;
+
+        @NotBlank(message = "请输入收货地址")
+        private String contactAddress;
+
+        public String getContactName() {
+            return contactName;
+        }
+
+        public void setContactName(String contactName) {
+            this.contactName = contactName;
+        }
+
+        public String getContactPhone() {
+            return contactPhone;
+        }
+
+        public void setContactPhone(String contactPhone) {
+            this.contactPhone = contactPhone;
+        }
+
+        public String getContactAddress() {
+            return contactAddress;
+        }
+
+        public void setContactAddress(String contactAddress) {
+            this.contactAddress = contactAddress;
         }
     }
 

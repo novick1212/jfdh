@@ -18,3 +18,7 @@ eshop-spring-boot-starter-huashou/
 portal-huashou-dev-v4.3/
 *.rar
 *.zip
+
+**/node_modules/
+**/playwright-report/
+**/test-results/

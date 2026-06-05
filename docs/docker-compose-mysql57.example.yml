@@ -1,0 +1,39 @@
+services:
+  db:
+    image: mysql:5.7
+    container_name: points-mysql57
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: points_exchange
+      MYSQL_USER: points
+      MYSQL_PASSWORD: change-me
+      MYSQL_ROOT_PASSWORD: change-me-root
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+
+  app:
+    build:
+      context: ../points-exchange-system
+      dockerfile: Dockerfile
+    container_name: points-app
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      PORT: 8080
+      SPRING_H2_CONSOLE_ENABLED: "false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/points_exchange?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: com.mysql.cj.jdbc.Driver
+      SPRING_DATASOURCE_USERNAME: points
+      SPRING_DATASOURCE_PASSWORD: change-me
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQL57Dialect
+      KUAIDI100_CUSTOMER: ""
+      KUAIDI100_KEY: ""
+    ports:
+      - "8080:8080"
+

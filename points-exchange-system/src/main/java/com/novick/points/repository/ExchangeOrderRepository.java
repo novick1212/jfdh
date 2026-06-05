@@ -11,4 +11,8 @@ public interface ExchangeOrderRepository extends JpaRepository<ExchangeOrder, Lo
     List<ExchangeOrder> findByUserIdOrderByCreatedAtDesc(Long userId);
 
     List<ExchangeOrder> findAllByOrderByCreatedAtDesc();
+
+    boolean existsByUserId(Long userId);
+
+    boolean existsByItemId(Long itemId);
 }

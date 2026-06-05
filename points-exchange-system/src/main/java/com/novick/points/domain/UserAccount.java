@@ -32,6 +32,15 @@ public class UserAccount {
     @Column(unique = true, length = 50)
     private String hrCode;
 
+    @Column(length = 50)
+    private String contactName;
+
+    @Column(length = 20)
+    private String contactPhone;
+
+    @Column(length = 255)
+    private String contactAddress;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserRole role;
@@ -90,6 +99,30 @@ public class UserAccount {
 
     public void setHrCode(String hrCode) {
         this.hrCode = hrCode;
+    }
+
+    public String getContactName() {
+        return contactName;
+    }
+
+    public void setContactName(String contactName) {
+        this.contactName = contactName;
+    }
+
+    public String getContactPhone() {
+        return contactPhone;
+    }
+
+    public void setContactPhone(String contactPhone) {
+        this.contactPhone = contactPhone;
+    }
+
+    public String getContactAddress() {
+        return contactAddress;
+    }
+
+    public void setContactAddress(String contactAddress) {
+        this.contactAddress = contactAddress;
     }
 
     public UserRole getRole() {

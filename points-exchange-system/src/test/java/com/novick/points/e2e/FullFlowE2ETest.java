@@ -67,10 +67,10 @@ class FullFlowE2ETest {
         mockMvc.perform(post("/api/admin/users/" + userId + "/redeem-quota")
                         .session(adminSession)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"quota\":5}"))
+                        .content("{\"quota\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.redeemQuota").value(5));
+                .andExpect(jsonPath("$.data.redeemQuota").value(1));
 
         MvcResult sendCodeResult = mockMvc.perform(post("/api/auth/sms-code")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -95,36 +95,34 @@ class FullFlowE2ETest {
                         .session(userSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.redeemRemaining").value(5));
+                .andExpect(jsonPath("$.data.redeemRemaining").value(1));
 
-        MvcResult itemsResult = mockMvc.perform(get("/api/app/items")
+        MvcResult homeResult = mockMvc.perform(get("/api/app/home")
                         .session(userSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
-        JsonNode itemsPayload = objectMapper.readTree(itemsResult.getResponse().getContentAsString());
-        List<Long> itemIds = firstNItemIds(itemsPayload.path("data"), 2);
+        JsonNode homePayload = objectMapper.readTree(homeResult.getResponse().getContentAsString());
+        long itemId = homePayload.path("data").path("items").get(0).path("id").asLong();
 
-        String checkoutBody = "{\"items\":[{\"itemId\":" + itemIds.get(0) + ",\"quantity\":1},{\"itemId\":" + itemIds.get(1)
-                + ",\"quantity\":2}],\"recipientName\":\"张三\",\"phone\":\"13900000001\",\"address\":\"成都市高新区\"}";
-        MvcResult checkoutResult = mockMvc.perform(post("/api/app/orders/checkout")
+        MvcResult checkoutResult = mockMvc.perform(post("/api/app/orders")
                         .session(userSession)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(checkoutBody))
+                        .content("{\"itemId\":" + itemId + ",\"quantity\":1,\"recipientName\":\"张三\",\"phone\":\"13900000001\",\"address\":\"成都市高新区\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
         JsonNode checkoutPayload = objectMapper.readTree(checkoutResult.getResponse().getContentAsString());
-        if (!checkoutPayload.path("data").isArray() || checkoutPayload.path("data").size() != 2) {
-            throw new IllegalStateException("结算应生成 2 条订单");
+        if (!checkoutPayload.path("data").isObject()) {
+            throw new IllegalStateException("下单返回格式错误");
         }
 
         mockMvc.perform(get("/api/auth/me")
                         .session(userSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.redeemUsed").value(3))
-                .andExpect(jsonPath("$.data.redeemRemaining").value(2));
+                .andExpect(jsonPath("$.data.redeemUsed").value(1))
+                .andExpect(jsonPath("$.data.redeemRemaining").value(0));
 
         MvcResult ordersResult = mockMvc.perform(get("/api/admin/orders")
                         .session(adminSession))
@@ -158,20 +156,6 @@ class FullFlowE2ETest {
             }
         }
         throw new IllegalStateException("未找到手机号对应用户：" + phoneNumber);
-    }
-
-    private List<Long> firstNItemIds(JsonNode items, int n) {
-        if (items == null || !items.isArray()) {
-            throw new IllegalStateException("商品列表返回格式错误");
-        }
-        List<Long> ids = new ArrayList<>();
-        for (JsonNode item : items) {
-            ids.add(item.path("id").asLong());
-            if (ids.size() >= n) {
-                return ids;
-            }
-        }
-        throw new IllegalStateException("可用商品数量不足");
     }
 
     private long firstOrderIdByUserId(JsonNode orders, long userId) {
