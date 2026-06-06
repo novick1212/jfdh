@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: points-exchange-system
+    env: docker
+    rootDir: points-exchange-system
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /app/index.html
+    disk:
+      name: points-exchange-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: SPRING_H2_CONSOLE_ENABLED
+        value: "false"
+      - key: SPRING_DATASOURCE_URL
+        value: jdbc:h2:file:/app/data/points-exchange;MODE=MYSQL;DB_CLOSE_DELAY=-1
+      - key: APP_LEGACY_STATIC_PATH
+        value: /app/legacy-static
+      - key: APP_SEED_ADMIN_USERNAME
+        value: admin
+      - key: APP_SEED_ADMIN_PASSWORD
+        generateValue: true
+      - key: APP_SEED_USER_USERNAME
+        value: demo
+      - key: APP_SEED_USER_PASSWORD
+        generateValue: true
+      - key: APP_SEED_USER_PHONE
+        value: 13800000000

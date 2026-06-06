@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户中心 - 积分兑换系统</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="app-mobile-body">
+<div class="mobile-shell">
+    <header class="mobile-topbar">
+        <div>
+            <div class="mobile-title">用户中心 - 积分兑换系统</div>
+            <div class="mobile-subtitle" id="welcomeText">加载中...</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="logoutBtn">退出登录</button>
+    </header>
+
+    <main class="mobile-main">
+        <section class="mobile-tab-page active" data-tab="home">
+            <section class="notice-card">
+                <div class="section-title-row">
+                    <h2>公告说明</h2>
+                    <span class="status-badge" id="redeemBadge">可兑换</span>
+                </div>
+                <div class="rich-text" id="announcementHtml"></div>
+                <img id="heroImage" class="hero-image" alt="活动图">
+            </section>
+            <section class="section-block">
+                <div class="section-title-row">
+                    <h2>端午福利方案</h2>
+                    <span class="muted">7 选 1，仅可兑换一次</span>
+                </div>
+                <div class="plan-list" id="itemGrid"></div>
+            </section>
+        </section>
+
+        <section class="mobile-tab-page" data-tab="orders">
+            <section class="section-block">
+                <div class="section-title-row">
+                    <h2>我的订单</h2>
+                    <span class="muted" id="orderSummary">暂无订单</span>
+                </div>
+                <div class="order-list" id="orderList"></div>
+            </section>
+        </section>
+
+        <section class="mobile-tab-page" data-tab="profile">
+            <section class="profile-banner" id="profileBanner"></section>
+            <section class="section-block">
+                <div class="section-title-row">
+                    <h2>收货信息</h2>
+                    <span class="muted">真实可编辑</span>
+                </div>
+                <div class="form-group">
+                    <label for="contactName">收货人</label>
+                    <input id="contactName" placeholder="请输入收货人">
+                </div>
+                <div class="form-group">
+                    <label for="contactPhone">手机号</label>
+                    <input id="contactPhone" placeholder="请输入手机号">
+                </div>
+                <div class="form-group">
+                    <label for="contactAddress">收货地址</label>
+                    <textarea id="contactAddress" placeholder="请输入详细收货地址"></textarea>
+                </div>
+                <button class="btn btn-primary block-btn" id="saveContactBtn">保存收货信息</button>
+            </section>
+
+            <section class="section-block info-list">
+                <div class="info-row">
+                    <span>客服热线</span>
+                    <a id="hotlineLink" href="#">-</a>
+                </div>
+                <div class="info-row">
+                    <span>兑换次数</span>
+                    <span id="quotaText">1 次</span>
+                </div>
+            </section>
+
+            <button class="btn btn-danger logout-wide-btn" id="logoutBottomBtn">退出登录</button>
+        </section>
+    </main>
+
+    <nav class="bottom-nav">
+        <button class="bottom-nav-item active" data-tab="home">首页</button>
+        <button class="bottom-nav-item" data-tab="orders">订单</button>
+        <button class="bottom-nav-item" data-tab="profile">我的</button>
+    </nav>
+</div>
+
+<div id="redeemModal" class="overlay" style="display:none;">
+    <div class="overlay-card">
+        <div class="section-title-row">
+            <h2>确认兑换方案</h2>
+            <button class="btn btn-secondary btn-sm" id="redeemCloseBtn">关闭</button>
+        </div>
+        <div id="redeemPlanMeta" class="muted" style="margin-bottom:12px;"></div>
+        <div class="form-group">
+            <label for="redeemRecipient">收货人</label>
+            <input id="redeemRecipient" placeholder="请输入收货人">
+        </div>
+        <div class="form-group">
+            <label for="redeemPhone">手机号</label>
+            <input id="redeemPhone" placeholder="请输入手机号">
+        </div>
+        <div class="form-group">
+            <label for="redeemAddress">收货地址</label>
+            <textarea id="redeemAddress" placeholder="请输入收货地址"></textarea>
+        </div>
+        <button class="btn btn-primary block-btn" id="submitRedeemBtn">确认提交</button>
+    </div>
+</div>
+
+<div id="trackingModal" class="overlay" style="display:none;">
+    <div class="overlay-card">
+        <div class="section-title-row">
+            <h2>物流轨迹</h2>
+            <button class="btn btn-secondary btn-sm" id="trackingCloseBtn">关闭</button>
+        </div>
+        <div class="muted" id="trackingMeta" style="margin-bottom:12px;"></div>
+        <div id="trackingTimeline"></div>
+    </div>
+</div>
+
+<script src="/js/http.js"></script>
+<script>
+    let homeState = null;
+    let selectedItemId = null;
+
+    function currentProfile() {
+        return homeState?.profile || {};
+    }
+
+    function setActiveTab(tab) {
+        document.querySelectorAll(".mobile-tab-page").forEach(el => {
+            el.classList.toggle("active", el.dataset.tab === tab);
+        });
+        document.querySelectorAll(".bottom-nav-item").forEach(el => {
+            el.classList.toggle("active", el.dataset.tab === tab);
+        });
+    }
+
+    function renderHome() {
+        const profile = currentProfile();
+        const siteConfig = homeState?.siteConfig || {};
+        const items = homeState?.items || [];
+        const hasRedeemed = !!profile.hasRedeemed;
+
+        document.getElementById("welcomeText").textContent = `${escapeHtml(profile.displayName || "")} / ${escapeHtml(profile.phoneNumber || "")}`;
+        document.getElementById("redeemBadge").textContent = hasRedeemed ? "已兑换" : "可兑换";
+        document.getElementById("announcementHtml").innerHTML = stripAnnouncementAnchors(siteConfig.announcementHtml || "<p>暂无公告</p>");
+        document.getElementById("heroImage").src = siteConfig.heroImageUrl || "";
+        document.getElementById("heroImage").style.display = siteConfig.heroImageUrl ? "block" : "none";
+
+        document.getElementById("itemGrid").innerHTML = items.map(item => `
+            <div class="plan-card">
+                <img src="${escapeHtml(item.coverImage || "")}" alt="${escapeHtml(item.name)}">
+                <div class="plan-card-body">
+                    <div class="section-title-row">
+                        <h3>${escapeHtml(item.name)}</h3>
+                        <span class="status-badge ${item.soldOut ? "sold-out" : ""}">${item.soldOut ? "已售罄" : "可选"}</span>
+                    </div>
+                    <p>${escapeHtml(item.description || "")}</p>
+                    <button class="btn btn-primary block-btn" onclick="openRedeemModal(${item.id})"
+                        ${hasRedeemed || item.soldOut ? "disabled" : ""}>
+                        ${hasRedeemed ? "已完成兑换" : item.soldOut ? "库存不足" : "选择此方案"}
+                    </button>
+                </div>
+            </div>
+        `).join("") || '<div class="empty-card">暂无可兑换方案</div>';
+    }
+
+    function renderOrders() {
+        const orders = homeState?.recentOrders || [];
+        document.getElementById("orderSummary").textContent = orders.length ? `共 ${orders.length} 条订单` : "暂无订单";
+        document.getElementById("orderList").innerHTML = orders.map(order => `
+            <div class="order-card">
+                <div class="section-title-row">
+                    <h3>${escapeHtml(order.itemName)}</h3>
+                    <span class="status-badge">${escapeHtml(order.status)}</span>
+                </div>
+                ${order.itemCoverImage ? `<img class="order-cover" src="${escapeHtml(order.itemCoverImage)}" alt="${escapeHtml(order.itemName)}">` : ""}
+                <div class="order-meta">订单号：${escapeHtml(order.orderNo)}</div>
+                <div class="order-meta">收货人：${escapeHtml(order.recipientName)} / ${escapeHtml(order.phone)}</div>
+                <div class="order-meta">收货地址：${escapeHtml(order.address)}</div>
+                ${order.trackingNo ? `<div class="order-meta">物流信息：${escapeHtml(order.shippingCarrier || "-")} / ${escapeHtml(order.trackingNo)}</div>` : ""}
+                <div class="order-actions">
+                    ${order.trackingNo ? `<button class="btn btn-secondary btn-sm" onclick="showTracking(${order.id})">查看物流</button>` : '<span class="muted">待管理员发货</span>'}
+                </div>
+            </div>
+        `).join("") || '<div class="empty-card">你还没有提交订单</div>';
+    }
+
+    function renderProfile() {
+        const profile = currentProfile();
+        const siteConfig = homeState?.siteConfig || {};
+        document.getElementById("profileBanner").innerHTML = `
+            <div class="user-chip">
+                <div class="user-avatar">${escapeHtml((profile.displayName || "我").slice(0, 1))}</div>
+                <div>
+                    <div class="user-name">${escapeHtml(profile.displayName || "")}</div>
+                    <div class="user-desc">${escapeHtml(profile.phoneNumber || "")}</div>
+                    <div class="user-desc">${escapeHtml(profile.hrCode || "")}</div>
+                </div>
+            </div>
+        `;
+        document.getElementById("contactName").value = profile.contactName || profile.displayName || "";
+        document.getElementById("contactPhone").value = profile.contactPhone || profile.phoneNumber || "";
+        document.getElementById("contactAddress").value = profile.contactAddress || "";
+        document.getElementById("quotaText").textContent = profile.hasRedeemed ? "已兑换 1 / 1" : "剩余 1 / 1";
+        const hotline = siteConfig.hotline || "-";
+        const hotlineLink = document.getElementById("hotlineLink");
+        hotlineLink.textContent = hotline;
+        hotlineLink.href = hotline && hotline !== "-" ? `tel:${hotline}` : "#";
+    }
+
+    function stripAnnouncementAnchors(html) {
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        template.content.querySelectorAll("a").forEach(link => link.remove());
+        return template.innerHTML;
+    }
+
+    async function refreshPage() {
+        homeState = await api("/api/app/home");
+        renderHome();
+        renderOrders();
+        renderProfile();
+    }
+
+    function openRedeemModal(itemId) {
+        const profile = currentProfile();
+        if (profile.hasRedeemed) {
+            alert("你已经完成兑换，不能重复提交");
+            return;
+        }
+        const item = (homeState?.items || []).find(it => it.id === itemId);
+        if (!item) {
+            alert("方案不存在");
+            return;
+        }
+        selectedItemId = itemId;
+        document.getElementById("redeemPlanMeta").textContent = `${item.name}：${item.description || ""}`;
+        document.getElementById("redeemRecipient").value = profile.contactName || profile.displayName || "";
+        document.getElementById("redeemPhone").value = profile.contactPhone || profile.phoneNumber || "";
+        document.getElementById("redeemAddress").value = profile.contactAddress || "";
+        document.getElementById("redeemModal").style.display = "flex";
+    }
+
+    function closeRedeemModal() {
+        document.getElementById("redeemModal").style.display = "none";
+        selectedItemId = null;
+    }
+
+    async function submitRedeem() {
+        if (!selectedItemId) {
+            alert("请选择兑换方案");
+            return;
+        }
+        try {
+            await api("/api/app/orders", {
+                method: "POST",
+                body: JSON.stringify({
+                    itemId: selectedItemId,
+                    quantity: 1,
+                    recipientName: document.getElementById("redeemRecipient").value.trim(),
+                    phone: document.getElementById("redeemPhone").value.trim(),
+                    address: document.getElementById("redeemAddress").value.trim()
+                })
+            });
+            closeRedeemModal();
+            alert("提交成功");
+            await refreshPage();
+            setActiveTab("orders");
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    async function saveContact() {
+        try {
+            await api("/api/app/profile/contact", {
+                method: "POST",
+                body: JSON.stringify({
+                    contactName: document.getElementById("contactName").value.trim(),
+                    contactPhone: document.getElementById("contactPhone").value.trim(),
+                    contactAddress: document.getElementById("contactAddress").value.trim()
+                })
+            });
+            alert("保存成功");
+            await refreshPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    async function showTracking(orderId) {
+        const modal = document.getElementById("trackingModal");
+        const metaEl = document.getElementById("trackingMeta");
+        const timelineEl = document.getElementById("trackingTimeline");
+        modal.style.display = "flex";
+        metaEl.textContent = "加载中...";
+        timelineEl.innerHTML = "";
+        try {
+            const tracking = await api(`/api/app/orders/${orderId}/tracking`);
+            const stateText = tracking.state === "3" ? "已签收" : tracking.state === "5" ? "派件中" : tracking.state === "1" ? "揽收" : tracking.state === "0" ? "在途" : (tracking.state || "-");
+            metaEl.textContent = `快递公司：${tracking.com || "-"}，单号：${tracking.nu || "-"}，状态：${stateText}，更新时间：${tracking.cachedAt || "-"}`;
+            const list = Array.isArray(tracking.data) ? tracking.data : [];
+            timelineEl.innerHTML = list.map(item => `
+                <div class="timeline-card">
+                    <div class="timeline-time">${escapeHtml(item.ftime || item.time || "")}</div>
+                    <div class="timeline-text">${escapeHtml(item.context || "")}</div>
+                </div>
+            `).join("") || '<div class="empty-card">暂无轨迹</div>';
+        } catch (e) {
+            metaEl.textContent = e.message;
+            timelineEl.innerHTML = "";
+        }
+    }
+
+    function closeTracking() {
+        document.getElementById("trackingModal").style.display = "none";
+    }
+
+    async function logout() {
+        await api("/api/auth/logout", { method: "POST" });
+        location.href = "/app/login.html";
+    }
+
+    document.querySelectorAll(".bottom-nav-item").forEach(btn => {
+        btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
+    });
+    document.getElementById("saveContactBtn").addEventListener("click", saveContact);
+    document.getElementById("submitRedeemBtn").addEventListener("click", submitRedeem);
+    document.getElementById("redeemCloseBtn").addEventListener("click", closeRedeemModal);
+    document.getElementById("trackingCloseBtn").addEventListener("click", closeTracking);
+    document.getElementById("logoutBtn").addEventListener("click", logout);
+    document.getElementById("logoutBottomBtn").addEventListener("click", logout);
+    document.getElementById("redeemModal").addEventListener("click", (e) => {
+        if (e.target && e.target.id === "redeemModal") {
+            closeRedeemModal();
+        }
+    });
+    document.getElementById("trackingModal").addEventListener("click", (e) => {
+        if (e.target && e.target.id === "trackingModal") {
+            closeTracking();
+        }
+    });
+
+    refreshPage().catch(() => {
+        location.href = "/app/login.html";
+    });
+</script>
+</body>
+</html>

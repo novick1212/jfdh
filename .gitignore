@@ -1,4 +1,39 @@
-node_modules/
-data/
+# IDE
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Build
 target/
+*.class
+
+# Logs
+logs/
+*.log
+
+# Database
+data/
 *.db
+*.trace.db
+
+# Environment
+.env
+*.local
+
+# Test results
+test-results/
+playwright-report/
+
+# Dependencies
+node_modules/
+
+# Runtime
+.runtime/
+*.rar
+*.zip
+
+# Other projects
+api-spring-boot-starter-v2.1/
+eshop-spring-boot-starter-huashou/
+portal-huashou-dev-v4.3/
