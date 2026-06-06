@@ -642,9 +642,7 @@ public class MallService {
             return "<p><strong>活动说明</strong></p><p>请从 7 个方案中选择 1 个完成兑换。</p>";
         }
         Safelist safelist = Safelist.none()
-                .addTags("p", "br", "strong", "b", "a", "ul", "ol", "li")
-                .addAttributes("a", "href", "target", "rel")
-                .addProtocols("a", "href", "http", "https", "mailto");
+                .addTags("p", "br", "strong", "b", "ul", "ol", "li");
         String cleaned = Jsoup.clean(source, safelist);
         return cleaned.isBlank() ? "<p>暂无公告</p>" : cleaned;
     }

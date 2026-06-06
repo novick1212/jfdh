@@ -134,7 +134,7 @@ test("后台导入用户、配置公告、导出报表（UI）", async ({ page }
   await page.locator("#importUsersBtn").click();
   await expect(page.locator("#userTable")).toContainText("未兑换用户");
 
-  await page.locator("#announcementHtml").fill("<p><strong>测试公告</strong></p><p><a href=\"https://example.com\">查看详情</a></p>");
+  await page.locator("#announcementHtml").fill("<p><strong>测试公告</strong></p><p>请根据公告说明完成兑换。</p>");
   await page.locator("#hotline").fill("400-800-0000");
   await page.locator("#saveSiteConfigBtn").click();
   await expect(page.locator("#announcementPreview")).toContainText("测试公告");

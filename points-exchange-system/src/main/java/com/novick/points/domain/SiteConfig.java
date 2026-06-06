@@ -21,7 +21,7 @@ public class SiteConfig {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String announcementHtml;
 
-    @Column(nullable = false, length = 500)
+    @Column(nullable = false, length = 2048)
     private String heroImageUrl;
 
     @Column(nullable = false, length = 50)

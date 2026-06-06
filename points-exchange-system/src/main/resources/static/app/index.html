@@ -18,7 +18,6 @@
 
     <main class="mobile-main">
         <section class="mobile-tab-page active" data-tab="home">
-            <section class="hero-card" id="userBanner"></section>
             <section class="notice-card">
                 <div class="section-title-row">
                     <h2>公告说明</h2>
@@ -150,19 +149,9 @@
 
         document.getElementById("welcomeText").textContent = `${escapeHtml(profile.displayName || "")} / ${escapeHtml(profile.phoneNumber || "")}`;
         document.getElementById("redeemBadge").textContent = hasRedeemed ? "已兑换" : "可兑换";
-        document.getElementById("announcementHtml").innerHTML = siteConfig.announcementHtml || "<p>暂无公告</p>";
+        document.getElementById("announcementHtml").innerHTML = stripAnnouncementAnchors(siteConfig.announcementHtml || "<p>暂无公告</p>");
         document.getElementById("heroImage").src = siteConfig.heroImageUrl || "";
         document.getElementById("heroImage").style.display = siteConfig.heroImageUrl ? "block" : "none";
-        document.getElementById("userBanner").innerHTML = `
-            <div class="user-chip">
-                <div class="user-avatar">${escapeHtml((profile.displayName || "用户").slice(0, 1))}</div>
-                <div>
-                    <div class="user-name">${escapeHtml(profile.displayName || "")}</div>
-                    <div class="user-desc">${escapeHtml(profile.phoneNumber || "")} / ${escapeHtml(profile.hrCode || "")}</div>
-                </div>
-            </div>
-            <div class="user-tip">每位用户仅可在 7 个方案中选择 1 个提交订单</div>
-        `;
 
         document.getElementById("itemGrid").innerHTML = items.map(item => `
             <div class="plan-card">
@@ -224,6 +213,13 @@
         const hotlineLink = document.getElementById("hotlineLink");
         hotlineLink.textContent = hotline;
         hotlineLink.href = hotline && hotline !== "-" ? `tel:${hotline}` : "#";
+    }
+
+    function stripAnnouncementAnchors(html) {
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        template.content.querySelectorAll("a").forEach(link => link.remove());
+        return template.innerHTML;
     }
 
     async function refreshPage() {

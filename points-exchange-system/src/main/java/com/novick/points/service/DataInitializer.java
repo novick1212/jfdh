@@ -22,6 +22,11 @@ import com.novick.points.repository.UserAccountRepository;
 @Component
 public class DataInitializer implements CommandLineRunner {
 
+    private static final String OLD_HERO_PROMPT =
+            "端午节活动横幅，龙舟与粽子元素，中国风红金配色，企业福利宣传海报，mobile hero banner, festive and elegant";
+    private static final String NEW_HERO_PROMPT =
+            "端午节手机端活动头图，淡雅青绿色中国风，粽叶与粽子礼盒摆拍，少量金色点缀，画面简洁高级，适合企业员工福利页面，mobile banner, realistic and elegant";
+
     private final AppProperties appProperties;
     private final AuthService authService;
     private final UserAccountRepository userAccountRepository;
@@ -115,10 +120,18 @@ public class DataInitializer implements CommandLineRunner {
         if (!siteConfigRepository.existsById(SiteConfig.DEFAULT_ID)) {
             SiteConfig config = new SiteConfig();
             config.setId(SiteConfig.DEFAULT_ID);
-            config.setAnnouncementHtml("<p><strong>端午福利说明</strong></p><p>本次活动每位员工仅可在 7 个方案中选择 1 个进行兑换，请先确认收货信息后再提交。</p><p><a href=\"https://www.baidu.com\" target=\"_blank\" rel=\"noopener noreferrer\">查看活动详情</a></p>");
-            config.setHeroImageUrl(createImageUrl("端午节活动横幅，龙舟与粽子元素，中国风红金配色，企业福利宣传海报，mobile hero banner, festive and elegant"));
+            config.setAnnouncementHtml("<p><strong>端午福利说明</strong></p><p>本次活动每位员工仅可在 7 个方案中选择 1 个进行兑换，请先确认收货信息后再提交。</p>");
+            config.setHeroImageUrl(defaultHeroImageUrl());
             config.setHotline("400-800-2026");
             siteConfigRepository.save(config);
+        } else {
+            siteConfigRepository.findById(SiteConfig.DEFAULT_ID).ifPresent(config -> {
+                String currentHero = config.getHeroImageUrl();
+                if (currentHero == null || currentHero.isBlank() || currentHero.equals(oldHeroImageUrl())) {
+                    config.setHeroImageUrl(defaultHeroImageUrl());
+                    siteConfigRepository.save(config);
+                }
+            });
         }
     }
 
@@ -139,5 +152,13 @@ public class DataInitializer implements CommandLineRunner {
         return "https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt="
                 + URLEncoder.encode(prompt, StandardCharsets.UTF_8)
                 + "&image_size=landscape_16_9";
+    }
+
+    private String defaultHeroImageUrl() {
+        return createImageUrl(NEW_HERO_PROMPT);
+    }
+
+    private String oldHeroImageUrl() {
+        return createImageUrl(OLD_HERO_PROMPT);
     }
 }
