@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - 积分兑换系统</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+<div class="page-shell">
+    <aside class="sidebar">
+        <div class="logo">
+            <img src="/res/default/bg/image/icon/logo1.png" alt="logo">
+            <div>
+                <strong>积分兑换后台</strong>
+                <div class="muted" style="color:#cbd5e1;">运营管理</div>
+            </div>
+        </div>
+        <a class="nav-link" href="#dashboard">概览</a>
+        <a class="nav-link" href="#config">首页配置</a>
+        <a class="nav-link" href="#items">方案管理</a>
+        <a class="nav-link" href="#orders">订单管理</a>
+        <a class="nav-link" href="#users">用户管理</a>
+    </aside>
+    <main class="main">
+        <div class="topbar">
+            <div>
+                <h1 class="headline">运营后台</h1>
+                <div class="muted" id="adminProfile">加载中...</div>
+            </div>
+            <button class="btn btn-secondary" id="logoutBtn">退出登录</button>
+        </div>
+
+        <section id="dashboard" class="grid cards" style="margin-bottom:24px;">
+            <div class="card">
+                <div class="muted">用户数</div>
+                <div class="metric" id="userCount">0</div>
+            </div>
+            <div class="card">
+                <div class="muted">方案数</div>
+                <div class="metric" id="itemCount">0</div>
+            </div>
+            <div class="card">
+                <div class="muted">订单数</div>
+                <div class="metric" id="orderCount">0</div>
+            </div>
+        </section>
+
+        <section id="config" class="card" style="margin-bottom:24px;">
+            <div class="section-head">
+                <h2 style="margin:0;">首页配置</h2>
+                <span class="muted">公告支持 p、br、strong、ul、ol、li 等简单标签</span>
+            </div>
+            <div class="grid cards" style="grid-template-columns: 1.2fr 1fr; align-items:start;">
+                <div>
+                    <div class="form-group">
+                        <label>公告说明（HTML）</label>
+                        <textarea id="announcementHtml" style="min-height:180px;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>活动头图</label>
+                        <input id="heroImageUrl" placeholder="请输入图片地址">
+                    </div>
+                    <div class="form-group">
+                        <label>客服热线</label>
+                        <input id="hotline" placeholder="请输入客服热线">
+                    </div>
+                    <button class="btn btn-primary" id="saveSiteConfigBtn">保存首页配置</button>
+                </div>
+                <div>
+                    <div class="muted" style="margin-bottom:8px;">预览</div>
+                    <div class="card" style="background:#f8fafc; box-shadow:none;">
+                        <div class="rich-text" id="announcementPreview"></div>
+                        <img id="heroImagePreview" class="hero-image" style="margin-top:12px;" alt="头图预览">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="profile" class="card" style="margin-bottom:24px;">
+            <div class="section-head">
+                <h2 style="margin:0;">管理员设置</h2>
+            </div>
+            <div style="max-width:400px;">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input id="adminUsername" placeholder="请输入新用户名">
+                </div>
+                <div class="form-group">
+                    <label>原密码</label>
+                    <input id="oldPassword" type="password" placeholder="留空则不修改密码">
+                </div>
+                <div class="form-group">
+                    <label>新密码</label>
+                    <input id="newPassword" type="password" placeholder="请输入新密码（至少6位）">
+                </div>
+                <button class="btn btn-primary" id="saveProfileBtn">保存设置</button>
+            </div>
+        </section>
+
+        <section id="items" class="card" style="margin-bottom:24px;">
+            <div class="section-head">
+                <h2 style="margin:0;">方案管理</h2>
+            </div>
+            <div class="grid cards" style="grid-template-columns: 1.2fr 1fr; align-items:start;">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>方案</th>
+                            <th>库存</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                        </thead>
+                        <tbody id="itemTable"></tbody>
+                    </table>
+                </div>
+                <div>
+                    <input id="itemId" type="hidden">
+                    <div class="form-group">
+                        <label>方案名称</label>
+                        <input id="itemName" placeholder="如：端午安康礼盒">
+                    </div>
+                    <div class="form-group">
+                        <label>方案说明</label>
+                        <textarea id="itemDesc" placeholder="请输入方案说明"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>库存</label>
+                        <input id="itemStock" type="number" value="20">
+                    </div>
+                    <div class="form-group">
+                        <label>方案图片</label>
+                        <input id="itemCover" placeholder="请输入图片地址">
+                    </div>
+                    <div class="form-group">
+                        <label>排序</label>
+                        <input id="itemSort" type="number" value="10">
+                    </div>
+                    <div class="form-group">
+                        <label>是否上架</label>
+                        <select id="itemActive">
+                            <option value="true">上架</option>
+                            <option value="false">下架</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                        <button class="btn btn-primary" id="saveItemBtn">新增方案</button>
+                        <button class="btn btn-secondary" id="cancelEditItemBtn" style="display:none;">取消编辑</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="orders" class="card" style="margin-bottom:24px;">
+            <div class="section-head">
+                <h2 style="margin:0;">订单管理</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>订单号</th>
+                        <th>用户</th>
+                        <th>方案</th>
+                        <th>状态</th>
+                        <th>收货信息</th>
+                        <th>物流</th>
+                        <th>操作</th>
+                    </tr>
+                    </thead>
+                    <tbody id="orderTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section id="users" class="card">
+            <div class="section-head">
+                <h2 style="margin:0;">用户管理</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>用户</th>
+                        <th>账号</th>
+                        <th>手机号</th>
+                        <th>人力码</th>
+                        <th>状态</th>
+                        <th>收货信息</th>
+                    </tr>
+                    </thead>
+                    <tbody id="userTable"></tbody>
+                </table>
+            </div>
+            <div style="margin-top:16px; display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+                <div class="form-group" style="margin:0; min-width:320px;">
+                    <label>导入用户（CSV）</label>
+                    <input type="file" id="userImportFile" accept=".csv,text/csv">
+                    <div class="muted" style="margin-top:6px;">格式：姓名,手机号,人力资源码（可带表头；用户名可不填）</div>
+                </div>
+                <button class="btn btn-secondary" id="importUsersBtn">导入</button>
+                <button class="btn btn-secondary" id="exportRedemptionReportBtn">导出兑换报表</button>
+                <div class="muted" id="importUsersResult" style="min-height:20px;"></div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<div id="fulfillModal" class="overlay" style="display:none;">
+    <div class="overlay-card">
+        <div class="section-title-row">
+            <h2>订单发货</h2>
+            <button class="btn btn-secondary btn-sm" id="closeFulfillModalBtn">关闭</button>
+        </div>
+        <div class="muted" id="fulfillOrderMeta" style="margin-bottom:12px;"></div>
+        <div class="form-group">
+            <label for="fulfillCarrier">快递公司编码（快递100 com）</label>
+            <input id="fulfillCarrier" placeholder="如：yuantong、shunfeng">
+        </div>
+        <div class="form-group">
+            <label for="fulfillTrackingNo">快递单号</label>
+            <input id="fulfillTrackingNo" placeholder="请输入快递单号">
+        </div>
+        <button class="btn btn-primary block-btn" id="submitFulfillBtn">确认发货</button>
+    </div>
+</div>
+
+<div id="addShipmentModal" class="overlay" style="display:none;">
+    <div class="overlay-card">
+        <div class="section-title-row">
+            <h2>添加物流单号</h2>
+            <button class="btn btn-secondary btn-sm" id="closeAddShipmentModalBtn">关闭</button>
+        </div>
+        <div class="muted" id="addShipmentOrderMeta" style="margin-bottom:12px;"></div>
+        <div class="form-group">
+            <label for="addShipmentCarrier">快递公司编码（快递100 com）</label>
+            <input id="addShipmentCarrier" placeholder="如：yuantong、shunfeng">
+        </div>
+        <div class="form-group">
+            <label for="addShipmentTrackingNo">快递单号</label>
+            <input id="addShipmentTrackingNo" placeholder="请输入快递单号">
+        </div>
+        <button class="btn btn-primary block-btn" id="submitAddShipmentBtn">确认添加</button>
+    </div>
+</div>
+<script src="/js/http.js"></script>
+<script>
+    let adminState = {
+        items: [],
+        orders: []
+    };
+    let editingItemId = null;
+    let fulfillingOrderId = null;
+
+    function renderAnnouncementPreview() {
+        document.getElementById("announcementPreview").innerHTML = document.getElementById("announcementHtml").value.trim() || "<p>暂无公告</p>";
+        const image = document.getElementById("heroImageUrl").value.trim();
+        const imageEl = document.getElementById("heroImagePreview");
+        imageEl.src = image;
+        imageEl.style.display = image ? "block" : "none";
+    }
+
+    async function loadAdminPage() {
+        const me = await api("/api/auth/me");
+        if (me.role !== "ADMIN") {
+            location.href = "/app/index.html";
+            return;
+        }
+        document.getElementById("adminProfile").textContent = `${me.displayName} / ${me.username}`;
+        document.getElementById("adminUsername").value = me.username || "";
+
+        const [summary, siteConfig, items, orders, users] = await Promise.all([
+            api("/api/admin/summary"),
+            api("/api/admin/site-config"),
+            api("/api/admin/items"),
+            api("/api/admin/orders"),
+            api("/api/admin/users")
+        ]);
+
+        document.getElementById("userCount").textContent = summary.userCount;
+        document.getElementById("itemCount").textContent = summary.itemCount;
+        document.getElementById("orderCount").textContent = summary.orderCount;
+
+        document.getElementById("announcementHtml").value = siteConfig.announcementHtml || "";
+        document.getElementById("heroImageUrl").value = siteConfig.heroImageUrl || "";
+        document.getElementById("hotline").value = siteConfig.hotline || "";
+        renderAnnouncementPreview();
+
+        adminState.items = items;
+        adminState.orders = orders;
+
+        document.getElementById("itemTable").innerHTML = items.map(item => `
+            <tr>
+                <td>${item.id}</td>
+                <td>
+                    <div>${escapeHtml(item.name)}</div>
+                    <div class="muted" style="margin-top:4px;">${escapeHtml(item.description || "")}</div>
+                </td>
+                <td>${item.stock}</td>
+                <td>${item.active ? "上架" : "下架"}</td>
+                <td>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                        <button class="btn btn-secondary btn-sm" onclick="editItem(${item.id})">修改</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})">删除</button>
+                    </div>
+                </td>
+            </tr>
+        `).join("") || '<tr><td colspan="5">暂无方案</td></tr>';
+
+        document.getElementById("orderTable").innerHTML = orders.map(order => {
+            const shipments = order.shipments || [];
+            return `
+            <tr>
+                <td>${escapeHtml(order.orderNo)}</td>
+                <td>${escapeHtml(order.userName)}</td>
+                <td>${escapeHtml(order.itemName)}</td>
+                <td>${escapeHtml(order.status)}</td>
+                <td>${escapeHtml(order.recipientName)} / ${escapeHtml(order.phone)}<div class="muted" style="margin-top:4px;">${escapeHtml(order.address || "")}</div></td>
+                <td>${
+                    shipments.length > 0
+                        ? shipments.map(s => `
+                            <div style="margin-bottom:4px;">
+                                <span>${escapeHtml(s.shippingCarrier || "-")} / ${escapeHtml(s.trackingNo || "")}</span>
+                                ${s.trackingUrl ? `<a href="${escapeHtml(s.trackingUrl)}" target="_blank" style="margin-left:8px;">查看</a>` : ""}
+                            </div>
+                        `).join("")
+                        : "-"
+                }</td>
+                <td>${order.status === "CREATED" ? `<button class="btn btn-success" onclick="openFulfillModal(${order.id})">发货</button>` : order.status === "FULFILLED" ? `<button class="btn btn-secondary btn-sm" onclick="openAddShipmentModal(${order.id})">添加物流</button>` : "-"}</td>
+            </tr>
+        `}).join("") || '<tr><td colspan="7">暂无订单</td></tr>';
+
+        document.getElementById("userTable").innerHTML = users.map(user => `
+            <tr>
+                <td>${escapeHtml(user.displayName)}</td>
+                <td>${escapeHtml(user.username)}</td>
+                <td>${escapeHtml(user.phoneNumber || "")}</td>
+                <td>${escapeHtml(user.hrCode || "")}</td>
+                <td>${user.hasRedeemed ? "已兑换" : "未兑换"}</td>
+                <td>${escapeHtml(user.contactName || "")} / ${escapeHtml(user.contactPhone || "")}<div class="muted" style="margin-top:4px;">${escapeHtml(user.contactAddress || "")}</div></td>
+            </tr>
+        `).join("") || '<tr><td colspan="6">暂无用户</td></tr>';
+    }
+
+    function resetItemForm() {
+        editingItemId = null;
+        document.getElementById("itemId").value = "";
+        document.getElementById("itemName").value = "";
+        document.getElementById("itemDesc").value = "";
+        document.getElementById("itemStock").value = 20;
+        document.getElementById("itemCover").value = "";
+        document.getElementById("itemSort").value = 10;
+        document.getElementById("itemActive").value = "true";
+        document.getElementById("saveItemBtn").textContent = "新增方案";
+        document.getElementById("cancelEditItemBtn").style.display = "none";
+    }
+
+    function editItem(itemId) {
+        const item = adminState.items.find(it => it.id === itemId);
+        if (!item) {
+            alert("方案不存在");
+            return;
+        }
+        editingItemId = itemId;
+        document.getElementById("itemId").value = item.id;
+        document.getElementById("itemName").value = item.name || "";
+        document.getElementById("itemDesc").value = item.description || "";
+        document.getElementById("itemStock").value = item.stock ?? 0;
+        document.getElementById("itemCover").value = item.coverImage || "";
+        document.getElementById("itemSort").value = item.sortOrder ?? 0;
+        document.getElementById("itemActive").value = item.active ? "true" : "false";
+        document.getElementById("saveItemBtn").textContent = "保存修改";
+        document.getElementById("cancelEditItemBtn").style.display = "inline-flex";
+        location.hash = "#items";
+    }
+
+    async function deleteItem(itemId) {
+        const item = adminState.items.find(it => it.id === itemId);
+        if (!item) {
+            alert("方案不存在");
+            return;
+        }
+        if (!confirm(`确定删除方案“${item.name}”吗？`)) {
+            return;
+        }
+        try {
+            await api(`/api/admin/items/${itemId}`, { method: "DELETE" });
+            if (editingItemId === itemId) {
+                resetItemForm();
+            }
+            await loadAdminPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    function openFulfillModal(orderId) {
+        const order = adminState.orders.find(it => it.id === orderId);
+        if (!order) {
+            alert("订单不存在");
+            return;
+        }
+        fulfillingOrderId = orderId;
+        document.getElementById("fulfillOrderMeta").textContent = `${order.userName} / ${order.itemName} / ${order.recipientName}`;
+        document.getElementById("fulfillCarrier").value = order.shippingCarrier || "";
+        document.getElementById("fulfillTrackingNo").value = order.trackingNo || "";
+        document.getElementById("fulfillModal").style.display = "flex";
+    }
+
+    function closeFulfillModal() {
+        fulfillingOrderId = null;
+        document.getElementById("fulfillModal").style.display = "none";
+        document.getElementById("fulfillOrderMeta").textContent = "";
+        document.getElementById("fulfillCarrier").value = "";
+        document.getElementById("fulfillTrackingNo").value = "";
+    }
+
+    let addingShipmentOrderId = null;
+    function openAddShipmentModal(orderId) {
+        const order = adminState.orders.find(it => it.id === orderId);
+        if (!order) {
+            alert("订单不存在");
+            return;
+        }
+        addingShipmentOrderId = orderId;
+        document.getElementById("addShipmentOrderMeta").textContent = `${order.userName} / ${order.itemName} / ${order.recipientName}`;
+        document.getElementById("addShipmentCarrier").value = "";
+        document.getElementById("addShipmentTrackingNo").value = "";
+        document.getElementById("addShipmentModal").style.display = "flex";
+    }
+
+    function closeAddShipmentModal() {
+        addingShipmentOrderId = null;
+        document.getElementById("addShipmentModal").style.display = "none";
+        document.getElementById("addShipmentOrderMeta").textContent = "";
+        document.getElementById("addShipmentCarrier").value = "";
+        document.getElementById("addShipmentTrackingNo").value = "";
+    }
+
+    async function submitAddShipment() {
+        if (!addingShipmentOrderId) {
+            alert("请选择订单");
+            return;
+        }
+        const shippingCarrier = document.getElementById("addShipmentCarrier").value.trim();
+        const trackingNo = document.getElementById("addShipmentTrackingNo").value.trim();
+        if (!trackingNo) {
+            alert("请输入快递单号");
+            return;
+        }
+        try {
+            await api(`/api/admin/orders/${addingShipmentOrderId}/shipments`, {
+                method: "POST",
+                body: JSON.stringify({
+                    trackingNo,
+                    shippingCarrier
+                })
+            });
+            closeAddShipmentModal();
+            await loadAdminPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    async function submitFulfillOrder() {
+        if (!fulfillingOrderId) {
+            alert("请选择订单");
+            return;
+        }
+        const shippingCarrier = document.getElementById("fulfillCarrier").value.trim();
+        const trackingNo = document.getElementById("fulfillTrackingNo").value.trim();
+        if (!shippingCarrier) {
+            alert("请输入快递公司编码");
+            return;
+        }
+        if (!trackingNo) {
+            alert("请输入快递单号");
+            return;
+        }
+        try {
+            await api(`/api/admin/orders/${fulfillingOrderId}/fulfill`, {
+                method: "POST",
+                body: JSON.stringify({
+                    trackingNo,
+                    shippingCarrier
+                })
+            });
+            closeFulfillModal();
+            await loadAdminPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
+    document.getElementById("importUsersBtn").addEventListener("click", async () => {
+        const fileInput = document.getElementById("userImportFile");
+        const resultEl = document.getElementById("importUsersResult");
+        resultEl.textContent = "";
+        if (!fileInput.files || fileInput.files.length === 0) {
+            resultEl.textContent = "请先选择 CSV 文件";
+            return;
+        }
+        const file = fileInput.files[0];
+        const formData = new FormData();
+        formData.append("file", file);
+        try {
+            const response = await fetch("/api/admin/users/import-csv", {
+                method: "POST",
+                credentials: "include",
+                body: formData
+            });
+            const payload = await response.json().catch(() => ({ success: false, message: "响应解析失败" }));
+            if (!response.ok || payload.success === false) {
+                throw new Error(payload.message || "导入失败");
+            }
+            const data = payload.data || {};
+            resultEl.textContent = `已导入：新增 ${data.created ?? 0}，更新 ${data.updated ?? 0}，错误 ${data.errorCount ?? 0}`;
+            await loadAdminPage();
+        } catch (e) {
+            resultEl.textContent = e.message;
+        }
+    });
+
+    document.getElementById("exportRedemptionReportBtn").addEventListener("click", () => {
+        location.href = "/api/admin/reports/redemption";
+    });
+
+    ["announcementHtml", "heroImageUrl"].forEach(id => {
+        document.getElementById(id).addEventListener("input", renderAnnouncementPreview);
+    });
+
+    document.getElementById("saveSiteConfigBtn").addEventListener("click", async () => {
+        try {
+            await api("/api/admin/site-config", {
+                method: "POST",
+                body: JSON.stringify({
+                    announcementHtml: document.getElementById("announcementHtml").value.trim(),
+                    heroImageUrl: document.getElementById("heroImageUrl").value.trim(),
+                    hotline: document.getElementById("hotline").value.trim()
+                })
+            });
+            alert("保存成功");
+            await loadAdminPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    });
+
+    document.getElementById("saveItemBtn").addEventListener("click", async () => {
+        try {
+            await api("/api/admin/items", {
+                method: "POST",
+                body: JSON.stringify({
+                    id: document.getElementById("itemId").value ? Number(document.getElementById("itemId").value) : null,
+                    name: document.getElementById("itemName").value.trim(),
+                    description: document.getElementById("itemDesc").value.trim(),
+                    stock: Number(document.getElementById("itemStock").value),
+                    coverImage: document.getElementById("itemCover").value.trim(),
+                    active: document.getElementById("itemActive").value === "true",
+                    sortOrder: Number(document.getElementById("itemSort").value)
+                })
+            });
+            resetItemForm();
+            await loadAdminPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    });
+
+    document.getElementById("cancelEditItemBtn").addEventListener("click", resetItemForm);
+    document.getElementById("submitFulfillBtn").addEventListener("click", submitFulfillOrder);
+    document.getElementById("closeFulfillModalBtn").addEventListener("click", closeFulfillModal);
+    document.getElementById("fulfillModal").addEventListener("click", (e) => {
+        if (e.target && e.target.id === "fulfillModal") {
+            closeFulfillModal();
+        }
+    });
+
+    document.getElementById("submitAddShipmentBtn").addEventListener("click", submitAddShipment);
+    document.getElementById("closeAddShipmentModalBtn").addEventListener("click", closeAddShipmentModal);
+    document.getElementById("addShipmentModal").addEventListener("click", (e) => {
+        if (e.target && e.target.id === "addShipmentModal") {
+            closeAddShipmentModal();
+        }
+    });
+
+    document.getElementById("saveProfileBtn").addEventListener("click", async () => {
+        const username = document.getElementById("adminUsername").value.trim();
+        const oldPassword = document.getElementById("oldPassword").value;
+        const newPassword = document.getElementById("newPassword").value;
+        try {
+            await api("/api/admin/profile", {
+                method: "POST",
+                body: JSON.stringify({
+                    username: username,
+                    oldPassword: oldPassword,
+                    newPassword: newPassword
+                })
+            });
+            alert("保存成功");
+            document.getElementById("oldPassword").value = "";
+            document.getElementById("newPassword").value = "";
+            document.getElementById("adminUsername").value = username;
+        } catch (e) {
+            alert(e.message);
+        }
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+        await api("/api/auth/logout", { method: "POST" });
+        location.href = "/admin/login.html";
+    });
+
+    resetItemForm();
+    loadAdminPage().catch(() => {
+        location.href = "/admin/login.html";
+    });
+</script>
+</body>
+</html>

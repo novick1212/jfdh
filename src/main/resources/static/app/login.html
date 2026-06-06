@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户登录 - 积分兑换系统</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="login-page">
+<div class="login-card">
+    <img src="/res/default/bg/image/icon/logo.png" alt="logo">
+    <h1>积分兑换系统</h1>
+    <p>请输入姓名、人力资源码、手机号获取验证码登录</p>
+    <div class="form-group">
+        <label for="displayName">姓名</label>
+        <input id="displayName" placeholder="请输入姓名" autocomplete="name">
+    </div>
+    <div class="form-group">
+        <label for="hrCode">人力资源码</label>
+        <input id="hrCode" placeholder="请输入人力资源码" autocomplete="off">
+    </div>
+    <div class="form-group">
+        <label for="phoneNumber">手机号</label>
+        <input id="phoneNumber" placeholder="请输入手机号" autocomplete="tel">
+    </div>
+    <div class="form-group">
+        <label for="smsCode">短信验证码</label>
+        <div style="display:flex; gap:12px;">
+            <input id="smsCode" placeholder="请输入 6 位验证码" style="flex:1;">
+            <button class="btn btn-secondary" type="button" id="sendCodeBtn" style="white-space:nowrap;">发送验证码</button>
+        </div>
+    </div>
+    <div class="muted" id="debugCode" style="margin-bottom:12px; min-height:20px;"></div>
+    <div class="error-text" id="error"></div>
+    <button class="btn btn-primary" style="width:100%" id="loginBtn">登录用户端</button>
+    <p style="margin-top:16px;">管理员请前往 <a href="/admin/login.html" style="color:#2563eb;">后台登录</a></p>
+</div>
+<script src="/js/http.js"></script>
+<script>
+    let countdownTimer = null;
+    let countdownSeconds = 0;
+
+    function startCountdown(seconds) {
+        countdownSeconds = seconds;
+        const sendBtn = document.getElementById("sendCodeBtn");
+        sendBtn.disabled = true;
+        updateCountdownText();
+        countdownTimer = setInterval(() => {
+            countdownSeconds--;
+            if (countdownSeconds <= 0) {
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+                sendBtn.disabled = false;
+                sendBtn.textContent = "发送验证码";
+            } else {
+                updateCountdownText();
+            }
+        }, 1000);
+    }
+
+    function updateCountdownText() {
+        const sendBtn = document.getElementById("sendCodeBtn");
+        sendBtn.textContent = `${countdownSeconds}秒后可重发`;
+    }
+
+    document.getElementById("sendCodeBtn").addEventListener("click", async () => {
+        if (countdownTimer) return;
+        const error = document.getElementById("error");
+        const debugCode = document.getElementById("debugCode");
+        error.textContent = "";
+        debugCode.textContent = "";
+        try {
+            const data = await api("/api/auth/sms-code", {
+                method: "POST",
+                body: JSON.stringify({
+                    displayName: document.getElementById("displayName").value.trim(),
+                    hrCode: document.getElementById("hrCode").value.trim(),
+                    phoneNumber: document.getElementById("phoneNumber").value.trim()
+                })
+            });
+            if (data.debugCode) {
+                debugCode.textContent = `开发环境验证码：${data.debugCode}`;
+            } else {
+                debugCode.textContent = "验证码已发送，请查收短信";
+            }
+            startCountdown(60);
+        } catch (e) {
+            error.textContent = e.message;
+        }
+    });
+
+    document.getElementById("loginBtn").addEventListener("click", async () => {
+        const error = document.getElementById("error");
+        error.textContent = "";
+        try {
+            const data = await api("/api/auth/sms-login", {
+                method: "POST",
+                body: JSON.stringify({
+                    hrCode: document.getElementById("hrCode").value.trim(),
+                    phoneNumber: document.getElementById("phoneNumber").value.trim(),
+                    smsCode: document.getElementById("smsCode").value.trim()
+                })
+            });
+            if (data.role === "ADMIN") {
+                location.href = "/admin/index.html";
+                return;
+            }
+            location.href = "/app/index.html";
+        } catch (e) {
+            error.textContent = e.message;
+        }
+    });
+</script>
+</body>
+</html>
