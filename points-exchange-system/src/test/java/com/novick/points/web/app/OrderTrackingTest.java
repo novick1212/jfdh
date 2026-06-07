@@ -1,7 +1,6 @@
 package com.novick.points.web.app;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -10,6 +9,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.LocalDateTime;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,10 +27,12 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novick.points.domain.ExchangeOrder;
+import com.novick.points.domain.OrderShipment;
 import com.novick.points.domain.OrderStatus;
 import com.novick.points.domain.UserAccount;
 import com.novick.points.domain.UserRole;
 import com.novick.points.repository.ExchangeOrderRepository;
+import com.novick.points.repository.OrderShipmentRepository;
 import com.novick.points.repository.UserAccountRepository;
 import com.novick.points.security.SessionAuthService;
 import com.novick.points.security.SessionPrincipal;
@@ -56,6 +60,9 @@ class OrderTrackingTest {
     @Autowired
     private ExchangeOrderRepository exchangeOrderRepository;
 
+    @Autowired
+    private OrderShipmentRepository orderShipmentRepository;
+
     @MockBean
     private Kuaidi100Client kuaidi100Client;
 
@@ -63,9 +70,16 @@ class OrderTrackingTest {
     void shouldGetTrackingFromMockedClient() throws Exception {
         UserAccount demoUser = userAccountRepository.findByUsername("demo").orElseThrow();
 
-        JsonNode mock = objectMapper.readTree(
-                "{\"status\":\"200\",\"state\":\"0\",\"com\":\"yuantong\",\"nu\":\"YT123456789\",\"data\":[{\"ftime\":\"2026-06-03 10:00:00\",\"context\":\"您的快件已揽收\"}]}");
-        when(kuaidi100Client.query(anyString(), anyString(), anyString())).thenReturn(mock);
+        Map<String, Object> mockResult = new LinkedHashMap<>();
+        mockResult.put("status", "200");
+        mockResult.put("state", "0");
+        mockResult.put("com", "yuantong");
+        mockResult.put("nu", "YT123456789");
+        Map<String, String> trackEntry = new LinkedHashMap<>();
+        trackEntry.put("ftime", "2026-06-03 10:00:00");
+        trackEntry.put("context", "您的快件已揽收");
+        mockResult.put("data", List.of(trackEntry));
+        when(kuaidi100Client.queryTracking(anyString(), anyString())).thenReturn(mockResult);
 
         ExchangeOrder order = new ExchangeOrder();
         order.setOrderNo("JFTRACK0001");
@@ -85,6 +99,13 @@ class OrderTrackingTest {
         order.setUpdatedAt(LocalDateTime.now());
         exchangeOrderRepository.save(order);
 
+        OrderShipment shipment = new OrderShipment();
+        shipment.setOrderId(order.getId());
+        shipment.setShippingCarrier("yuantong");
+        shipment.setTrackingNo("YT123456789");
+        shipment.setCreatedAt(LocalDateTime.now());
+        orderShipmentRepository.save(shipment);
+
         MockHttpSession session = new MockHttpSession();
         session.setAttribute(SessionAuthService.SESSION_KEY,
                 new SessionPrincipal(demoUser.getId(), demoUser.getUsername(), demoUser.getDisplayName(), UserRole.USER));
@@ -98,6 +119,6 @@ class OrderTrackingTest {
         JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
         assertThat(root.path("success").asBoolean(), is(true));
         assertThat(root.path("data").path("state").asText(), is("0"));
-        assertThat(root.path("data").path("data").get(0).path("context").asText(), containsString("已揽收"));
+        assertThat(root.path("data").path("data").get(0).path("context").asText(), is("您的快件已揽收"));
     }
 }
