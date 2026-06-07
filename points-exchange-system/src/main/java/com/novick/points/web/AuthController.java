@@ -2,6 +2,7 @@ package com.novick.points.web;
 
 import java.util.Map;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.novick.points.common.ApiResponse;
+import com.novick.points.security.CsrfTokenUtil;
+import com.novick.points.security.LoginAttemptService;
 import com.novick.points.security.SessionAuthService;
 import com.novick.points.security.SessionPrincipal;
 import com.novick.points.service.AuthService;
@@ -28,18 +31,40 @@ public class AuthController {
     private final AuthService authService;
     private final SmsCodeService smsCodeService;
     private final SessionAuthService sessionAuthService;
+    private final LoginAttemptService loginAttemptService;
 
-    public AuthController(AuthService authService, SmsCodeService smsCodeService, SessionAuthService sessionAuthService) {
+    public AuthController(AuthService authService, SmsCodeService smsCodeService,
+            SessionAuthService sessionAuthService, LoginAttemptService loginAttemptService) {
         this.authService = authService;
         this.smsCodeService = smsCodeService;
         this.sessionAuthService = sessionAuthService;
+        this.loginAttemptService = loginAttemptService;
+    }
+
+    @GetMapping("/csrf-token")
+    public ApiResponse<Map<String, String>> csrfToken(HttpSession session) {
+        String token = CsrfTokenUtil.getOrCreateToken(session);
+        return ApiResponse.success(Map.of("csrfToken", token));
     }
 
     @PostMapping("/login")
-    public ApiResponse<Map<String, Object>> login(@Valid @RequestBody LoginRequest request, HttpSession session) {
-        SessionPrincipal principal = authService.authenticate(request.getUsername(), request.getPassword());
-        sessionAuthService.login(session, principal);
-        return ApiResponse.success("登录成功", authService.profile(principal));
+    public ApiResponse<Map<String, Object>> login(@Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest) {
+        // 暴力破解防护：检查登录频率限制
+        loginAttemptService.checkLoginAllowed(request.getUsername());
+
+        try {
+            SessionPrincipal principal = authService.authenticate(request.getUsername(), request.getPassword());
+            // 登录成功，使用新 session（防止 Session 固定攻击）
+            sessionAuthService.login(httpRequest, principal);
+            // 清除失败计数
+            loginAttemptService.loginSucceeded(request.getUsername());
+            return ApiResponse.success("登录成功", authService.profile(principal));
+        } catch (Exception e) {
+            // 记录失败次数
+            loginAttemptService.loginFailed(request.getUsername());
+            throw e;
+        }
     }
 
     @PostMapping("/sms-code")
@@ -48,17 +73,19 @@ public class AuthController {
     }
 
     @PostMapping("/sms-login")
-    public ApiResponse<Map<String, Object>> smsLogin(@Valid @RequestBody SmsLoginRequest request, HttpSession session) {
+    public ApiResponse<Map<String, Object>> smsLogin(@Valid @RequestBody SmsLoginRequest request,
+            HttpServletRequest httpRequest) {
         // 直接验证姓名+人力资源码登录
         authService.assertSmsLoginUser(request.getHrCode(), request.getDisplayName());
         SessionPrincipal principal = authService.authenticateByHrCode(request.getHrCode());
-        sessionAuthService.login(session, principal);
+        // 使用新 session（防止 Session 固定攻击）
+        sessionAuthService.login(httpRequest, principal);
         return ApiResponse.success("登录成功", authService.profile(principal));
     }
 
     @PostMapping("/logout")
-    public ApiResponse<Void> logout(HttpSession session) {
-        sessionAuthService.logout(session);
+    public ApiResponse<Void> logout(HttpServletRequest httpRequest) {
+        sessionAuthService.logout(httpRequest);
         return ApiResponse.success("已退出登录", null);
     }
 

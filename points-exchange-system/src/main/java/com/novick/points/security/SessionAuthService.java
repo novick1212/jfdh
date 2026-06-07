@@ -1,5 +1,6 @@
 package com.novick.points.security;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 
 import org.springframework.stereotype.Component;
@@ -12,12 +13,23 @@ public class SessionAuthService {
 
     public static final String SESSION_KEY = "POINTS_LOGIN_USER";
 
-    public void login(HttpSession session, SessionPrincipal principal) {
-        session.setAttribute(SESSION_KEY, principal);
+    /**
+     * 登录并设置 Session，防止 Session 固定攻击：先 invalidate 旧 session，再创建新 session。
+     */
+    public void login(HttpServletRequest request, SessionPrincipal principal) {
+        HttpSession oldSession = request.getSession(false);
+        if (oldSession != null) {
+            oldSession.invalidate();
+        }
+        HttpSession newSession = request.getSession(true);
+        newSession.setAttribute(SESSION_KEY, principal);
     }
 
-    public void logout(HttpSession session) {
-        session.invalidate();
+    public void logout(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
     }
 
     public SessionPrincipal requireLogin(HttpSession session) {

@@ -7,8 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
+
+import javax.servlet.http.HttpSession;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,8 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:points-e2e-test;MODE=MYSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
         "spring.jpa.hibernate.ddl-auto=create-drop",
-        "app.sms-mock-enabled=true"
+        "app.sms-mock-enabled=true",
+        "app.csrf-enabled=false"
 })
 @AutoConfigureMockMvc
 @Transactional
@@ -39,25 +42,31 @@ class FullFlowE2ETest {
 
     @Test
     void shouldRunFullFlow() throws Exception {
+        // 管理员登录（session fixation 保护会创建新 session）
         MockHttpSession adminSession = new MockHttpSession();
-        mockMvc.perform(post("/api/auth/login")
+        MvcResult loginResult = mockMvc.perform(post("/api/auth/login")
                         .session(adminSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"admin\",\"password\":\"admin123\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+                .andExpect(jsonPath("$.success").value(true))
+                .andReturn();
+        // 获取登录后的新 session
+        HttpSession newAdminSession = loginResult.getRequest().getSession(false);
+        MockHttpSession activeAdminSession = (newAdminSession instanceof MockHttpSession)
+                ? (MockHttpSession) newAdminSession : adminSession;
 
         String csv = "姓名,人力资源码\n张三,HR9999\n";
         MockMultipartFile file = new MockMultipartFile("file", "users.csv", "text/csv",
                 csv.getBytes(StandardCharsets.UTF_8));
         mockMvc.perform(multipart("/api/admin/users/import-csv")
                         .file(file)
-                        .session(adminSession))
+                        .session(activeAdminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
         MvcResult usersResult = mockMvc.perform(get("/api/admin/users")
-                        .session(adminSession))
+                        .session(activeAdminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
@@ -65,40 +74,36 @@ class FullFlowE2ETest {
         long userId = findUserIdByHrCode(usersPayload.path("data"), "HR9999");
 
         mockMvc.perform(post("/api/admin/users/" + userId + "/redeem-quota")
-                        .session(adminSession)
+                        .session(activeAdminSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"quota\":1}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.redeemQuota").value(1));
 
-        MvcResult sendCodeResult = mockMvc.perform(post("/api/auth/sms-code")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"displayName\":\"张三\",\"hrCode\":\"HR9999\",\"phoneNumber\":\"13900000001\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.debugCode").exists())
-                .andReturn();
-        JsonNode sendCodePayload = objectMapper.readTree(sendCodeResult.getResponse().getContentAsString());
-        String debugCode = sendCodePayload.path("data").path("debugCode").asText();
-
+        // SMS 功能已关闭，直接使用人力资源码+姓名登录
         MockHttpSession userSession = new MockHttpSession();
-        mockMvc.perform(post("/api/auth/sms-login")
+        MvcResult userLoginResult = mockMvc.perform(post("/api/auth/sms-login")
                         .session(userSession)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"hrCode\":\"HR9999\",\"phoneNumber\":\"13900000001\",\"smsCode\":\"" + debugCode + "\"}"))
+                        .content("{\"hrCode\":\"HR9999\",\"displayName\":\"张三\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.hrCode").value("HR9999"));
+                .andExpect(jsonPath("$.data.hrCode").value("HR9999"))
+                .andReturn();
+        // 获取用户登录后的新 session
+        HttpSession newUserSession = userLoginResult.getRequest().getSession(false);
+        MockHttpSession activeUserSession = (newUserSession instanceof MockHttpSession)
+                ? (MockHttpSession) newUserSession : userSession;
 
         mockMvc.perform(get("/api/auth/me")
-                        .session(userSession))
+                        .session(activeUserSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.redeemRemaining").value(1));
 
         MvcResult homeResult = mockMvc.perform(get("/api/app/home")
-                        .session(userSession))
+                        .session(activeUserSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
@@ -106,7 +111,7 @@ class FullFlowE2ETest {
         long itemId = homePayload.path("data").path("items").get(0).path("id").asLong();
 
         MvcResult checkoutResult = mockMvc.perform(post("/api/app/orders")
-                        .session(userSession)
+                        .session(activeUserSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"itemId\":" + itemId + ",\"quantity\":1,\"recipientName\":\"张三\",\"phone\":\"13900000001\",\"address\":\"成都市高新区\"}"))
                 .andExpect(status().isOk())
@@ -118,14 +123,14 @@ class FullFlowE2ETest {
         }
 
         mockMvc.perform(get("/api/auth/me")
-                        .session(userSession))
+                        .session(activeUserSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.redeemUsed").value(1))
                 .andExpect(jsonPath("$.data.redeemRemaining").value(0));
 
         MvcResult ordersResult = mockMvc.perform(get("/api/admin/orders")
-                        .session(adminSession))
+                        .session(activeAdminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
@@ -133,7 +138,7 @@ class FullFlowE2ETest {
         long orderId = firstOrderIdByUserId(ordersPayload.path("data"), userId);
 
         mockMvc.perform(post("/api/admin/orders/" + orderId + "/fulfill")
-                        .session(adminSession)
+                        .session(activeAdminSession)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"shippingCarrier\":\"顺丰\",\"trackingNo\":\"SF123456789\"}"))
                 .andExpect(status().isOk())
@@ -143,21 +148,9 @@ class FullFlowE2ETest {
                 .andExpect(jsonPath("$.data.shipments[0].trackingNo").value("SF123456789"));
 
         mockMvc.perform(get("/api/app/orders")
-                        .session(userSession))
+                        .session(activeUserSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
-    }
-
-    private long findUserIdByPhone(JsonNode users, String phoneNumber) {
-        if (users == null || !users.isArray()) {
-            throw new IllegalStateException("用户列表返回格式错误");
-        }
-        for (JsonNode user : users) {
-            if (phoneNumber.equals(user.path("phoneNumber").asText())) {
-                return user.path("id").asLong();
-            }
-        }
-        throw new IllegalStateException("未找到手机号对应用户：" + phoneNumber);
     }
 
     private long findUserIdByHrCode(JsonNode users, String hrCode) {

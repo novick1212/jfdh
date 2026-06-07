@@ -7,6 +7,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,7 +15,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import javax.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -115,9 +116,8 @@ public class MallService {
     }
 
     public List<Map<String, Object>> listUserOrders(Long userId) {
-        return exchangeOrderRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(this::toOrderMap)
-                .collect(Collectors.toList());
+        List<ExchangeOrder> orders = exchangeOrderRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        return mapOrdersWithPreload(orders);
     }
 
     @Transactional
@@ -191,7 +191,7 @@ public class MallService {
         UserAccount user = getUser(principal.getUserId());
         assertCanRedeemOnce(user);
 
-        RewardItem item = rewardItemRepository.findById(command.getItemId())
+        RewardItem item = rewardItemRepository.findByIdForUpdate(command.getItemId())
                 .orElseThrow(() -> new BusinessException("兑换方案不存在"));
         if (!item.isActive()) {
             throw new BusinessException("方案已下架");
@@ -304,9 +304,8 @@ public class MallService {
     }
 
     public List<Map<String, Object>> listAllOrders() {
-        return exchangeOrderRepository.findAllByOrderByCreatedAtDesc().stream()
-                .map(this::toOrderMap)
-                .collect(Collectors.toList());
+        List<ExchangeOrder> orders = exchangeOrderRepository.findAllByOrderByCreatedAtDesc();
+        return mapOrdersWithPreload(orders);
     }
 
     @Transactional
@@ -777,6 +776,65 @@ public class MallService {
         data.put("fulfilledAt", order.getFulfilledAt());
         data.put("createdAt", order.getCreatedAt());
         return data;
+    }
+
+    /**
+     * 批量映射订单列表，预加载用户、商品和物流数据，避免 N+1 查询问题。
+     */
+    private List<Map<String, Object>> mapOrdersWithPreload(List<ExchangeOrder> orders) {
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> userIds = new HashSet<>();
+        Set<Long> itemIds = new HashSet<>();
+        List<Long> orderIds = new ArrayList<>();
+        for (ExchangeOrder order : orders) {
+            userIds.add(order.getUserId());
+            itemIds.add(order.getItemId());
+            orderIds.add(order.getId());
+        }
+
+        Map<Long, UserAccount> userMap = new HashMap<>();
+        userAccountRepository.findAllById(userIds).forEach(u -> userMap.put(u.getId(), u));
+
+        Map<Long, RewardItem> itemMap = new HashMap<>();
+        rewardItemRepository.findAllById(itemIds).forEach(i -> itemMap.put(i.getId(), i));
+
+        Map<Long, List<OrderShipment>> shipmentMap = new HashMap<>();
+        orderShipmentRepository.findByOrderIdInOrderByCreatedAtAsc(orderIds).forEach(s ->
+                shipmentMap.computeIfAbsent(s.getOrderId(), k -> new ArrayList<>()).add(s));
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ExchangeOrder order : orders) {
+            UserAccount user = userMap.get(order.getUserId());
+            RewardItem item = itemMap.get(order.getItemId());
+            List<OrderShipment> shipments = shipmentMap.getOrDefault(order.getId(), List.of());
+            List<Map<String, Object>> shipmentsData = shipments.stream()
+                    .map(this::toShipmentMap)
+                    .collect(Collectors.toList());
+
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("id", order.getId());
+            data.put("orderNo", order.getOrderNo());
+            data.put("userId", order.getUserId());
+            data.put("userName", user == null ? "-" : user.getDisplayName());
+            data.put("itemId", order.getItemId());
+            data.put("itemName", order.getItemName());
+            data.put("itemCoverImage", item == null ? null : item.getCoverImage());
+            data.put("quantity", order.getQuantity());
+            data.put("totalPoints", order.getTotalPoints());
+            data.put("status", order.getStatus());
+            data.put("recipientName", order.getRecipientName());
+            data.put("phone", order.getPhone());
+            data.put("address", order.getAddress());
+            data.put("shipments", shipmentsData);
+            data.put("hasShipments", !shipments.isEmpty());
+            data.put("fulfilledAt", order.getFulfilledAt());
+            data.put("createdAt", order.getCreatedAt());
+            result.add(data);
+        }
+        return result;
     }
 
     private Map<String, Object> toShipmentMap(OrderShipment shipment) {
