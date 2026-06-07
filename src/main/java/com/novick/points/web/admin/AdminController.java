@@ -124,6 +124,21 @@ public class AdminController {
         return ApiResponse.success("物流已添加", mallService.addShipment(id, request.getShippingCarrier(), request.getTrackingNo()));
     }
 
+    @DeleteMapping("/orders/{orderId}/shipments/{shipmentId}")
+    public ApiResponse<Void> deleteShipment(@PathVariable Long orderId, @PathVariable Long shipmentId, HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        mallService.deleteShipment(orderId, shipmentId);
+        return ApiResponse.success("物流已删除", null);
+    }
+
+    @GetMapping("/orders/{orderId}/shipments/{shipmentId}/tracking")
+    public ApiResponse<Map<String, Object>> getShipmentTracking(@PathVariable Long orderId, 
+            @PathVariable Long shipmentId, HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        Map<String, Object> tracking = mallService.getShipmentTracking(orderId, shipmentId);
+        return ApiResponse.success(tracking);
+    }
+
     @GetMapping("/users")
     public ApiResponse<List<Map<String, Object>>> users(HttpSession session) {
         sessionAuthService.requireRole(session, UserRole.ADMIN);
@@ -164,12 +179,58 @@ public class AdminController {
             return ApiResponse.failure("请选择 CSV 文件");
         }
         try {
-            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            String content = decodeWithCharsetDetection(file.getBytes());
             List<MallService.UserImportCommand> users = parseCsv(content);
             return ApiResponse.success("导入完成", mallService.importUsers(users));
         } catch (Exception e) {
             return ApiResponse.failure("导入失败：" + e.getMessage());
         }
+    }
+
+    private String decodeWithCharsetDetection(byte[] bytes) {
+        // 先尝试 UTF-8
+        String utf8Content = new String(bytes, StandardCharsets.UTF_8);
+        if (!looksLikeGarbled(utf8Content)) {
+            return utf8Content;
+        }
+        // 尝试 GBK（中文 Windows 常用）
+        try {
+            String gbkContent = new String(bytes, "GBK");
+            if (!looksLikeGarbled(gbkContent)) {
+                return gbkContent;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        // 尝试 GB2312
+        try {
+            String gb2312Content = new String(bytes, "GB2312");
+            if (!looksLikeGarbled(gb2312Content)) {
+                return gb2312Content;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        // 回退到 UTF-8
+        return utf8Content;
+    }
+
+    private boolean looksLikeGarbled(String content) {
+        if (content == null || content.isEmpty()) {
+            return false;
+        }
+        // 检测是否包含乱码特征：连续的 ? 或 锟斤拷 等
+        if (content.contains("锟斤拷") || content.contains("�")) {
+            return true;
+        }
+        // 检测中文乱码比例
+        long chineseCount = content.chars().filter(c -> c >= 0x4E00 && c <= 0x9FA5).count();
+        long totalCount = content.length();
+        if (totalCount > 0 && chineseCount > 0) {
+            // 如果有中文字符但识别率太低，可能是乱码
+            return chineseCount < totalCount * 0.1 && totalCount > 50;
+        }
+        return false;
     }
 
     private List<MallService.UserImportCommand> parseCsv(String content) {

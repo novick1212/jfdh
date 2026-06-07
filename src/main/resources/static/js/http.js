@@ -22,3 +22,14 @@ function escapeHtml(value) {
         .replaceAll(">", "&gt;")
         .replaceAll("\"", "&quot;");
 }
+
+function getOrderStatusText(status) {
+    const statusMap = {
+        "PENDING": "待处理",
+        "PROCESSING": "处理中",
+        "FULFILLED": "已兑换",
+        "CANCELLED": "已取消",
+        "REFUNDED": "已退款"
+    };
+    return statusMap[status] || status || "-";
+}

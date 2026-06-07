@@ -5,15 +5,21 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 
 import com.novick.points.config.AppProperties;
+import com.novick.points.domain.ExchangeOrder;
+import com.novick.points.domain.OrderShipment;
+import com.novick.points.domain.OrderStatus;
 import com.novick.points.domain.PointsTransaction;
 import com.novick.points.domain.RewardItem;
 import com.novick.points.domain.SiteConfig;
 import com.novick.points.domain.TransactionType;
 import com.novick.points.domain.UserAccount;
 import com.novick.points.domain.UserRole;
+import com.novick.points.repository.ExchangeOrderRepository;
+import com.novick.points.repository.OrderShipmentRepository;
 import com.novick.points.repository.PointsTransactionRepository;
 import com.novick.points.repository.RewardItemRepository;
 import com.novick.points.repository.SiteConfigRepository;
@@ -33,39 +39,72 @@ public class DataInitializer implements CommandLineRunner {
     private final RewardItemRepository rewardItemRepository;
     private final PointsTransactionRepository pointsTransactionRepository;
     private final SiteConfigRepository siteConfigRepository;
+    private final ExchangeOrderRepository exchangeOrderRepository;
+    private final OrderShipmentRepository orderShipmentRepository;
 
     public DataInitializer(AppProperties appProperties, AuthService authService,
             UserAccountRepository userAccountRepository, RewardItemRepository rewardItemRepository,
-            PointsTransactionRepository pointsTransactionRepository, SiteConfigRepository siteConfigRepository) {
+            PointsTransactionRepository pointsTransactionRepository, SiteConfigRepository siteConfigRepository,
+            ExchangeOrderRepository exchangeOrderRepository, OrderShipmentRepository orderShipmentRepository) {
         this.appProperties = appProperties;
         this.authService = authService;
         this.userAccountRepository = userAccountRepository;
         this.rewardItemRepository = rewardItemRepository;
         this.pointsTransactionRepository = pointsTransactionRepository;
         this.siteConfigRepository = siteConfigRepository;
+        this.exchangeOrderRepository = exchangeOrderRepository;
+        this.orderShipmentRepository = orderShipmentRepository;
     }
 
     @Override
     public void run(String... args) {
-        if (userAccountRepository.count() == 0) {
+        try {
+            // 等待一下让Hibernate先创建表
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        try {
+            if (userAccountRepository.count() == 0) {
+            String adminUsername = appProperties.getSeedAdminUsername();
+            if (adminUsername == null || adminUsername.isBlank()) {
+                adminUsername = "admin";
+            }
+            String adminPassword = appProperties.getSeedAdminPassword();
+            if (adminPassword == null || adminPassword.isBlank()) {
+                adminPassword = "admin123";
+            }
             UserAccount admin = new UserAccount();
-            admin.setUsername(appProperties.getSeedAdminUsername());
-            admin.setPasswordHash(authService.encode(appProperties.getSeedAdminPassword()));
+            admin.setUsername(adminUsername);
+            admin.setPasswordHash(authService.encode(adminPassword));
             admin.setDisplayName("系统管理员");
             admin.setRole(UserRole.ADMIN);
             admin.setPointsBalance(0);
             userAccountRepository.save(admin);
 
+            String userUsername = appProperties.getSeedUserUsername();
+            if (userUsername == null || userUsername.isBlank()) {
+                userUsername = "demo";
+            }
+            String userPassword = appProperties.getSeedUserPassword();
+            if (userPassword == null || userPassword.isBlank()) {
+                userPassword = "demo123";
+            }
+            String userPhone = appProperties.getSeedUserPhone();
+            if (userPhone == null) {
+                userPhone = "13800000000";
+            }
             UserAccount demoUser = new UserAccount();
-            demoUser.setUsername(appProperties.getSeedUserUsername());
-            demoUser.setPasswordHash(authService.encode(appProperties.getSeedUserPassword()));
+            demoUser.setUsername(userUsername);
+            demoUser.setPasswordHash(authService.encode(userPassword));
             demoUser.setDisplayName("演示用户");
-            demoUser.setPhoneNumber(appProperties.getSeedUserPhone());
+            demoUser.setPhoneNumber(userPhone);
             demoUser.setHrCode("HR0001");
             demoUser.setRole(UserRole.USER);
             demoUser.setRedeemQuota(1);
             demoUser.setContactName("演示用户");
-            demoUser.setContactPhone(appProperties.getSeedUserPhone());
+            demoUser.setContactPhone(userPhone);
             demoUser.setContactAddress("四川省成都市高新区天府大道 100 号");
             userAccountRepository.save(demoUser);
 
@@ -132,6 +171,10 @@ public class DataInitializer implements CommandLineRunner {
                     siteConfigRepository.save(config);
                 }
             });
+        }
+        } catch (Exception e) {
+            System.out.println("DataInitializer 等待表创建...");
+            try { Thread.sleep(3000); } catch (InterruptedException ie) {}
         }
     }
 

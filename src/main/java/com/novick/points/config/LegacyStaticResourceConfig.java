@@ -21,9 +21,13 @@ public class LegacyStaticResourceConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        Path legacyPath = Paths.get(appProperties.getLegacyStaticPath());
-        if (Files.exists(legacyPath)) {
-            String location = legacyPath.toUri().toString();
+        String legacyPath = appProperties.getLegacyStaticPath();
+        if (legacyPath == null || legacyPath.isBlank()) {
+            return;
+        }
+        Path path = Paths.get(legacyPath);
+        if (Files.exists(path)) {
+            String location = path.toUri().toString();
             registry.addResourceHandler("/res/**", "/bg/**", "/include/**", "/error/**", "/webjars/**")
                     .addResourceLocations(location + "res/", location + "bg/", location + "include/",
                             location + "error/", location + "webjars/");

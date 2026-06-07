@@ -143,41 +143,38 @@ public class MallService {
         if (principal == null || principal.getUserId() == null || !principal.getUserId().equals(order.getUserId())) {
             throw new BusinessException("无权限访问");
         }
-        if (order.getTrackingNo() == null || order.getTrackingNo().trim().isEmpty()) {
+
+        // 从 OrderShipment 表获取最新的物流信息
+        List<OrderShipment> shipments = orderShipmentRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
+        if (shipments.isEmpty()) {
             throw new BusinessException("暂无物流信息");
         }
-        if (order.getShippingCarrier() == null || order.getShippingCarrier().trim().isEmpty()) {
-            throw new BusinessException("暂无快递公司编码（快递100 com），请联系管理员补充");
+        // 使用最新的物流单号
+        OrderShipment latestShipment = shipments.get(shipments.size() - 1);
+        
+        return getShipmentTracking(orderId, latestShipment.getId());
+    }
+
+    @Transactional
+    public Map<String, Object> getShipmentTracking(Long orderId, Long shipmentId) {
+        OrderShipment shipment = orderShipmentRepository.findById(shipmentId)
+                .orElseThrow(() -> new BusinessException("物流信息不存在"));
+        if (!shipment.getOrderId().equals(orderId)) {
+            throw new BusinessException("物流信息不匹配");
         }
 
-        int minIntervalSeconds = 1800;
-        if (order.getTrackingUpdatedAt() != null && order.getTrackingData() != null && !order.getTrackingData().trim().isEmpty()) {
-            long seconds = Duration.between(order.getTrackingUpdatedAt(), LocalDateTime.now()).getSeconds();
-            if (seconds >= 0 && seconds < minIntervalSeconds) {
-                try {
-                    Map<String, Object> cached = objectMapper.readValue(order.getTrackingData(), Map.class);
-                    cached.put("cachedAt", order.getTrackingUpdatedAt().format(EXPORT_TIME_FORMATTER));
-                    return cached;
-                } catch (Exception e) {
-                    order.setTrackingData(null);
-                }
-            }
+        String shippingCarrier = shipment.getShippingCarrier();
+        String trackingNo = shipment.getTrackingNo();
+
+        if (trackingNo == null || trackingNo.trim().isEmpty()) {
+            throw new BusinessException("暂无物流单号");
+        }
+        if (shippingCarrier == null || shippingCarrier.trim().isEmpty()) {
+            throw new BusinessException("暂无快递公司编码，请联系管理员补充");
         }
 
-        JsonNode root = kuaidi100Client.query(order.getShippingCarrier(), order.getTrackingNo(), order.getPhone());
-        try {
-            order.setTrackingData(objectMapper.writeValueAsString(root));
-        } catch (Exception e) {
-            order.setTrackingData(root.toString());
-        }
-        order.setTrackingState(root.path("state").asText(null));
-        order.setTrackingUpdatedAt(LocalDateTime.now());
-        order.setUpdatedAt(LocalDateTime.now());
-        exchangeOrderRepository.save(order);
-
-        Map<String, Object> result = objectMapper.convertValue(root, Map.class);
-        result.put("cachedAt", order.getTrackingUpdatedAt().format(EXPORT_TIME_FORMATTER));
-        return result;
+        // 调用快递100查询
+        return kuaidi100Client.queryTracking(shippingCarrier, trackingNo);
     }
 
     public List<Map<String, Object>> listUserTransactions(Long userId) {
@@ -329,6 +326,9 @@ public class MallService {
             shipment.setTrackingNo(trackingNo.trim());
             shipment.setTrackingUrl("https://m.kuaidi100.com/result.jsp?nu=" + trackingNo.trim());
             orderShipmentRepository.save(shipment);
+            // 同时更新 ExchangeOrder 表的字段，方便 getOrderTracking 查询
+            order.setShippingCarrier(shippingCarrier != null ? shippingCarrier.trim().toLowerCase() : null);
+            order.setTrackingNo(trackingNo.trim());
         }
         order.setStatus(OrderStatus.FULFILLED);
         if (order.getFulfilledAt() == null) {
@@ -359,9 +359,35 @@ public class MallService {
         shipment.setTrackingNo(normalizedTrackingNo);
         shipment.setTrackingUrl("https://m.kuaidi100.com/result.jsp?nu=" + normalizedTrackingNo);
         orderShipmentRepository.save(shipment);
+        // 同时更新 ExchangeOrder 表的字段，方便 getOrderTracking 查询
+        order.setShippingCarrier(shippingCarrier != null ? shippingCarrier.trim().toLowerCase() : null);
+        order.setTrackingNo(normalizedTrackingNo);
         order.setUpdatedAt(LocalDateTime.now());
         exchangeOrderRepository.save(order);
         return toOrderMap(order);
+    }
+
+    @Transactional
+    public void deleteShipment(Long orderId, Long shipmentId) {
+        ExchangeOrder order = exchangeOrderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException("订单不存在"));
+        OrderShipment shipment = orderShipmentRepository.findById(shipmentId)
+                .orElseThrow(() -> new BusinessException("物流记录不存在"));
+        if (!shipment.getOrderId().equals(orderId)) {
+            throw new BusinessException("物流记录与订单不匹配");
+        }
+        orderShipmentRepository.delete(shipment);
+        // 更新订单的物流信息
+        List<OrderShipment> remaining = orderShipmentRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
+        if (remaining.isEmpty()) {
+            order.setShippingCarrier(null);
+            order.setTrackingNo(null);
+        } else {
+            OrderShipment latest = remaining.get(remaining.size() - 1);
+            order.setShippingCarrier(latest.getShippingCarrier());
+            order.setTrackingNo(latest.getTrackingNo());
+        }
+        exchangeOrderRepository.save(order);
     }
 
     public List<Map<String, Object>> listShipments(Long orderId) {

@@ -10,7 +10,6 @@
 <div class="page-shell">
     <aside class="sidebar">
         <div class="logo">
-            <img src="/res/default/bg/image/icon/logo1.png" alt="logo">
             <div>
                 <strong>积分兑换后台</strong>
                 <div class="muted" style="color:#cbd5e1;">运营管理</div>
@@ -217,8 +216,22 @@
         </div>
         <div class="muted" id="fulfillOrderMeta" style="margin-bottom:12px;"></div>
         <div class="form-group">
-            <label for="fulfillCarrier">快递公司编码（快递100 com）</label>
-            <input id="fulfillCarrier" placeholder="如：yuantong、shunfeng">
+            <label for="fulfillCarrier">快递公司</label>
+            <select id="fulfillCarrier">
+                <option value="">请选择快递公司</option>
+                <option value="yunda">韵达快递</option>
+                <option value="yuantong">圆通速递</option>
+                <option value="zhongtong">中通快递</option>
+                <option value="shentong">申通快递</option>
+                <option value="shunfeng">顺丰速运</option>
+                <option value="jtexpress">极兔速递</option>
+                <option value="jd">京东物流</option>
+                <option value="ems">EMS</option>
+                <option value="debangkuaidi">德邦快递</option>
+                <option value="huitongkuaidi">百世快递</option>
+                <option value="youzhengguonei">邮政快递包裹</option>
+                <option value="annengwuliu">安能快运</option>
+            </select>
         </div>
         <div class="form-group">
             <label for="fulfillTrackingNo">快递单号</label>
@@ -236,14 +249,71 @@
         </div>
         <div class="muted" id="addShipmentOrderMeta" style="margin-bottom:12px;"></div>
         <div class="form-group">
-            <label for="addShipmentCarrier">快递公司编码（快递100 com）</label>
-            <input id="addShipmentCarrier" placeholder="如：yuantong、shunfeng">
+            <label for="addShipmentCarrier">快递公司</label>
+            <select id="addShipmentCarrier">
+                <option value="">请选择快递公司</option>
+                <option value="yunda">韵达快递</option>
+                <option value="yuantong">圆通速递</option>
+                <option value="zhongtong">中通快递</option>
+                <option value="shentong">申通快递</option>
+                <option value="shunfeng">顺丰速运</option>
+                <option value="jtexpress">极兔速递</option>
+                <option value="jd">京东物流</option>
+                <option value="ems">EMS</option>
+                <option value="debangkuaidi">德邦快递</option>
+                <option value="huitongkuaidi">百世快递</option>
+                <option value="youzhengguonei">邮政快递包裹</option>
+                <option value="annengwuliu">安能快运</option>
+            </select>
         </div>
         <div class="form-group">
             <label for="addShipmentTrackingNo">快递单号</label>
             <input id="addShipmentTrackingNo" placeholder="请输入快递单号">
         </div>
         <button class="btn btn-primary block-btn" id="submitAddShipmentBtn">确认添加</button>
+    </div>
+</div>
+
+<div id="editShipmentModal" class="overlay" style="display:none;">
+    <div class="overlay-card">
+        <div class="section-title-row">
+            <h2>修改物流信息</h2>
+            <button class="btn btn-secondary btn-sm" id="closeEditShipmentModalBtn">关闭</button>
+        </div>
+        <div class="form-group">
+            <label for="editShipmentCarrier">快递公司</label>
+            <select id="editShipmentCarrier">
+                <option value="">请选择快递公司</option>
+                <option value="yunda">韵达快递</option>
+                <option value="yuantong">圆通速递</option>
+                <option value="zhongtong">中通快递</option>
+                <option value="shentong">申通快递</option>
+                <option value="shunfeng">顺丰速运</option>
+                <option value="jtexpress">极兔速递</option>
+                <option value="jd">京东物流</option>
+                <option value="ems">EMS</option>
+                <option value="debangkuaidi">德邦快递</option>
+                <option value="huitongkuaidi">百世快递</option>
+                <option value="youzhengguonei">邮政快递包裹</option>
+                <option value="annengwuliu">安能快运</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="editShipmentTrackingNo">快递单号</label>
+            <input id="editShipmentTrackingNo" placeholder="请输入快递单号">
+        </div>
+        <button class="btn btn-primary block-btn" id="submitEditShipmentBtn">保存修改</button>
+    </div>
+</div>
+
+<div id="trackingModal" class="overlay" style="display:none;">
+    <div class="overlay-card" style="max-width:600px;max-height:80vh;overflow-y:auto;">
+        <div class="section-title-row">
+            <h2>物流轨迹</h2>
+            <button class="btn btn-secondary btn-sm" id="trackingCloseBtn">关闭</button>
+        </div>
+        <div class="muted" id="trackingMeta" style="margin-bottom:12px;"></div>
+        <div id="trackingTimeline"></div>
     </div>
 </div>
 <script src="/js/http.js"></script>
@@ -254,6 +324,49 @@
     };
     let editingItemId = null;
     let fulfillingOrderId = null;
+
+    function getOrderStatusText(status) {
+        const statusMap = {
+            "PENDING": "待处理",
+            "PROCESSING": "处理中",
+            "FULFILLED": "已兑换",
+            "CANCELLED": "已取消",
+            "REFUNDED": "已退款"
+        };
+        return statusMap[status] || status || "-";
+    }
+
+    async function viewTracking(orderId, shipmentId) {
+        const modal = document.getElementById("trackingModal");
+        const metaEl = document.getElementById("trackingMeta");
+        const timelineEl = document.getElementById("trackingTimeline");
+        modal.style.display = "flex";
+        metaEl.textContent = "加载中...";
+        timelineEl.innerHTML = "";
+        try {
+            const tracking = await api(`/api/admin/orders/${orderId}/shipments/${shipmentId}/tracking`);
+            if (tracking.success === false) {
+                metaEl.textContent = tracking.message || "查询失败";
+                return;
+            }
+            const stateText = tracking.state === "3" ? "已签收" : tracking.state === "5" ? "派件中" : tracking.state === "1" ? "揽收" : tracking.state === "0" ? "在途" : (tracking.state || "-");
+            metaEl.textContent = `快递公司：${tracking.com || "-"}，单号：${tracking.nu || "-"}，状态：${stateText}`;
+            const list = Array.isArray(tracking.data) ? tracking.data : [];
+            timelineEl.innerHTML = list.map(item => `
+                <div class="timeline-card">
+                    <div class="timeline-time">${escapeHtml(item.ftime || item.time || "")}</div>
+                    <div class="timeline-text">${escapeHtml(item.context || "")}</div>
+                </div>
+            `).join("") || '<div class="empty-card">暂无轨迹</div>';
+        } catch (e) {
+            metaEl.textContent = e.message;
+            timelineEl.innerHTML = "";
+        }
+    }
+
+    function closeTracking() {
+        document.getElementById("trackingModal").style.display = "none";
+    }
 
     function renderAnnouncementPreview() {
         document.getElementById("announcementPreview").innerHTML = document.getElementById("announcementHtml").value.trim() || "<p>暂无公告</p>";
@@ -317,14 +430,16 @@
                 <td>${escapeHtml(order.orderNo)}</td>
                 <td>${escapeHtml(order.userName)}</td>
                 <td>${escapeHtml(order.itemName)}</td>
-                <td>${escapeHtml(order.status)}</td>
+                <td>${getOrderStatusText(order.status)}</td>
                 <td>${escapeHtml(order.recipientName)} / ${escapeHtml(order.phone)}<div class="muted" style="margin-top:4px;">${escapeHtml(order.address || "")}</div></td>
                 <td>${
                     shipments.length > 0
                         ? shipments.map(s => `
-                            <div style="margin-bottom:4px;">
-                                <span>${escapeHtml(s.shippingCarrier || "-")} / ${escapeHtml(s.trackingNo || "")}</span>
-                                ${s.trackingUrl ? `<a href="${escapeHtml(s.trackingUrl)}" target="_blank" style="margin-left:8px;">查看</a>` : ""}
+                            <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #eee;">
+                                <div style="margin-bottom:4px;">${escapeHtml(s.shippingCarrier || "-")} / ${escapeHtml(s.trackingNo || "")}</div>
+                                <button class="btn btn-secondary btn-sm" onclick="openEditShipmentModal(${order.id}, ${s.id}, '${escapeHtml(s.shippingCarrier || "")}', '${escapeHtml(s.trackingNo || "")}')" style="margin-right:4px;">修改</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteShipment(${order.id}, ${s.id})" style="margin-right:4px;">删除</button>
+                                <button class="btn btn-secondary btn-sm" onclick="viewTracking(${order.id}, ${s.id})" style="margin-right:4px;">查看</button>
                             </div>
                         `).join("")
                         : "-"
@@ -466,6 +581,38 @@
         }
     }
 
+    let editingShipmentOrderId = null;
+    let editingShipmentId = null;
+    function openEditShipmentModal(orderId, shipmentId, carrier, trackingNo) {
+        editingShipmentOrderId = orderId;
+        editingShipmentId = shipmentId;
+        document.getElementById("editShipmentCarrier").value = carrier;
+        document.getElementById("editShipmentTrackingNo").value = trackingNo;
+        document.getElementById("editShipmentModal").style.display = "flex";
+    }
+
+    function closeEditShipmentModal() {
+        editingShipmentOrderId = null;
+        editingShipmentId = null;
+        document.getElementById("editShipmentModal").style.display = "none";
+    }
+
+    async function deleteShipment(orderId, shipmentId) {
+        const confirmed = window.confirm("确定删除这条物流信息吗？\n\n删除后无法恢复！");
+        if (!confirmed) {
+            console.log("用户取消删除");
+            return;
+        }
+        try {
+            await api(`/api/admin/orders/${orderId}/shipments/${shipmentId}`, {
+                method: "DELETE"
+            });
+            await loadAdminPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    }
+
     async function submitFulfillOrder() {
         if (!fulfillingOrderId) {
             alert("请选择订单");
@@ -566,8 +713,10 @@
             });
             resetItemForm();
             await loadAdminPage();
+            alert("保存成功！");
         } catch (e) {
-            alert(e.message);
+            console.error("保存失败:", e);
+            alert("保存失败: " + (e.message || "请重试"));
         }
     });
 
@@ -607,6 +756,49 @@
             document.getElementById("adminUsername").value = username;
         } catch (e) {
             alert(e.message);
+        }
+    });
+
+    document.getElementById("closeEditShipmentModalBtn").addEventListener("click", closeEditShipmentModal);
+    document.getElementById("editShipmentModal").addEventListener("click", (e) => {
+        if (e.target && e.target.id === "editShipmentModal") {
+            closeEditShipmentModal();
+        }
+    });
+    document.getElementById("submitEditShipmentBtn").addEventListener("click", async () => {
+        if (!editingShipmentOrderId || !editingShipmentId) {
+            alert("订单或物流信息不存在");
+            return;
+        }
+        const shippingCarrier = document.getElementById("editShipmentCarrier").value.trim();
+        const trackingNo = document.getElementById("editShipmentTrackingNo").value.trim();
+        if (!trackingNo) {
+            alert("请输入快递单号");
+            return;
+        }
+        try {
+            // 修改需要先删除再添加，因为API没有更新接口
+            await api(`/api/admin/orders/${editingShipmentOrderId}/shipments/${editingShipmentId}`, {
+                method: "DELETE"
+            });
+            await api(`/api/admin/orders/${editingShipmentOrderId}/shipments`, {
+                method: "POST",
+                body: JSON.stringify({
+                    trackingNo,
+                    shippingCarrier
+                })
+            });
+            closeEditShipmentModal();
+            await loadAdminPage();
+        } catch (e) {
+            alert(e.message);
+        }
+    });
+
+    document.getElementById("trackingCloseBtn").addEventListener("click", closeTracking);
+    document.getElementById("trackingModal").addEventListener("click", (e) => {
+        if (e.target && e.target.id === "trackingModal") {
+            closeTracking();
         }
     });
 

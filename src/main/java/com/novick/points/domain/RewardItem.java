@@ -22,7 +22,7 @@ public class RewardItem {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false, length = 500)
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @Column(nullable = false)
@@ -31,7 +31,7 @@ public class RewardItem {
     @Column(nullable = false)
     private Integer stock;
 
-    @Column(nullable = false, length = 500)
+    @Column(columnDefinition = "TEXT")
     private String coverImage;
 
     @Column(nullable = false)
