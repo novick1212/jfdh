@@ -4,23 +4,23 @@ server:
 spring:
   application:
     name: points-exchange-system
+
+  # === MySQL 配置 (支持环境变量部署) ===
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/points-exchange;MODE=MYSQL;DB_CLOSE_DELAY=-1}
-    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.h2.Driver}
-    username: ${SPRING_DATASOURCE_USERNAME:sa}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://113.44.121.131:3306/points_exchange?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:rsdb}
+    password: ${SPRING_DATASOURCE_PASSWORD:rs@2025}
   jpa:
-    database-platform: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.H2Dialect}
+    database-platform: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.MySQL8Dialect}
     hibernate:
       ddl-auto: update
     properties:
       hibernate:
         format_sql: true
+        jdbc:
+          time_zone: Asia/Shanghai
     open-in-view: false
-  h2:
-    console:
-      enabled: ${SPRING_H2_CONSOLE_ENABLED:true}
-      path: /h2-console
 
 app:
   legacy-static-path: ${APP_LEGACY_STATIC_PATH:./legacy-static}
@@ -32,3 +32,11 @@ app:
   sms-mock-enabled: ${APP_SMS_MOCK_ENABLED:true}
   sms-code-ttl-seconds: ${APP_SMS_CODE_TTL_SECONDS:300}
   sms-resend-interval-seconds: ${APP_SMS_RESEND_INTERVAL_SECONDS:60}
+  aliyun-sms-access-key-id: ${APP_ALIYUN_SMS_ACCESS_KEY_ID:YOUR_ACCESS_KEY_ID}
+  aliyun-sms-access-key-secret: ${APP_ALIYUN_SMS_ACCESS_KEY_SECRET:YOUR_ACCESS_KEY_SECRET}
+  aliyun-sms-sign-name: ${APP_ALIYUN_SMS_SIGN_NAME:四川佳宏凯原商贸}
+  aliyun-sms-template-code: ${APP_ALIYUN_SMS_TEMPLATE_CODE:SMS_334955643}
+
+kuaidi100:
+  customer: ${KUAIDI100_CUSTOMER:4F8FE114369C1F6797B8A05292B976BA}
+  key: ${KUAIDI100_KEY:EEzFumDe5683}

@@ -42,20 +42,21 @@ public class AuthService {
         return new SessionPrincipal(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole());
     }
 
-    public void assertSmsLoginUser(String phoneNumber, String displayName, String hrCode) {
-        UserAccount user = userAccountRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow(() -> new BusinessException("手机号未绑定用户"));
+    public void assertSmsLoginUser(String hrCode, String displayName) {
+        UserAccount user = userAccountRepository.findByHrCode(hrCode)
+                .orElseThrow(() -> new BusinessException("人力资源码不存在"));
         assertUserEnabled(user);
         String expectedName = user.getDisplayName() == null ? "" : user.getDisplayName().trim();
-        String expectedHr = user.getHrCode() == null ? "" : user.getHrCode().trim();
-        if (expectedName.isBlank() || expectedHr.isBlank()) {
-            throw new BusinessException("用户信息未导入完整，请联系管理员");
+        if (!expectedName.equals(displayName == null ? "" : displayName.trim())) {
+            throw new BusinessException("姓名与人力资源码不匹配");
         }
-        String actualName = displayName == null ? "" : displayName.trim();
-        String actualHr = hrCode == null ? "" : hrCode.trim();
-        if (!expectedName.equals(actualName) || !expectedHr.equals(actualHr)) {
-            throw new BusinessException("姓名或人力资源码不匹配");
-        }
+    }
+
+    public SessionPrincipal authenticateByHrCode(String hrCode) {
+        UserAccount user = userAccountRepository.findByHrCode(hrCode)
+                .orElseThrow(() -> new BusinessException("人力资源码不存在"));
+        assertUserEnabled(user);
+        return new SessionPrincipal(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole());
     }
 
     private void assertUserEnabled(UserAccount user) {
@@ -66,6 +67,42 @@ public class AuthService {
 
     public String encode(String password) {
         return passwordEncoder.encode(password);
+    }
+
+    public Map<String, Object> updateAdminProfile(Long adminId, String username, String oldPassword, String newPassword) {
+        UserAccount admin = userAccountRepository.findById(adminId)
+                .orElseThrow(() -> new BusinessException("管理员不存在"));
+        if (admin.getRole() != UserRole.ADMIN) {
+            throw new BusinessException("无权限操作");
+        }
+
+        // 验证旧密码
+        if (oldPassword != null && !oldPassword.isBlank()) {
+            if (!passwordEncoder.matches(oldPassword, admin.getPasswordHash())) {
+                throw new BusinessException("原密码错误");
+            }
+            if (newPassword == null || newPassword.isBlank()) {
+                throw new BusinessException("新密码不能为空");
+            }
+            if (newPassword.length() < 6) {
+                throw new BusinessException("新密码长度不能少于6位");
+            }
+            admin.setPasswordHash(passwordEncoder.encode(newPassword));
+        }
+
+        // 修改用户名
+        if (username != null && !username.isBlank()) {
+            if (!username.equals(admin.getUsername())) {
+                // 检查用户名是否被占用
+                if (userAccountRepository.findByUsername(username).isPresent()) {
+                    throw new BusinessException("用户名已被占用");
+                }
+                admin.setUsername(username);
+            }
+        }
+
+        userAccountRepository.save(admin);
+        return profile(new SessionPrincipal(admin.getId(), admin.getUsername(), admin.getDisplayName(), admin.getRole()));
     }
 
     public Map<String, Object> profile(SessionPrincipal principal) {

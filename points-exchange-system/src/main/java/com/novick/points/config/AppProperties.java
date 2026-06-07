@@ -14,6 +14,12 @@ public class AppProperties {
     private boolean smsMockEnabled = true;
     private int smsCodeTtlSeconds = 300;
     private int smsResendIntervalSeconds = 60;
+    private String aliyunSmsAccessKeyId;
+
+    private String aliyunSmsAccessKeySecret;
+    private String aliyunSmsSignName;
+    private String aliyunSmsTemplateCode;
+
 
     public String getLegacyStaticPath() {
         return legacyStaticPath;
@@ -85,5 +91,37 @@ public class AppProperties {
 
     public void setSmsResendIntervalSeconds(int smsResendIntervalSeconds) {
         this.smsResendIntervalSeconds = smsResendIntervalSeconds;
+    }
+
+    public String getAliyunSmsAccessKeyId() {
+        return aliyunSmsAccessKeyId;
+    }
+
+    public void setAliyunSmsAccessKeyId(String aliyunSmsAccessKeyId) {
+        this.aliyunSmsAccessKeyId = aliyunSmsAccessKeyId;
+    }
+
+    public String getAliyunSmsAccessKeySecret() {
+        return aliyunSmsAccessKeySecret;
+    }
+
+    public void setAliyunSmsAccessKeySecret(String aliyunSmsAccessKeySecret) {
+        this.aliyunSmsAccessKeySecret = aliyunSmsAccessKeySecret;
+    }
+
+    public String getAliyunSmsSignName() {
+        return aliyunSmsSignName;
+    }
+
+    public void setAliyunSmsSignName(String aliyunSmsSignName) {
+        this.aliyunSmsSignName = aliyunSmsSignName;
+    }
+
+    public String getAliyunSmsTemplateCode() {
+        return aliyunSmsTemplateCode;
+    }
+
+    public void setAliyunSmsTemplateCode(String aliyunSmsTemplateCode) {
+        this.aliyunSmsTemplateCode = aliyunSmsTemplateCode;
     }
 }

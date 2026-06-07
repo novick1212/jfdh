@@ -17,7 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:points-auth-test;MODE=MYSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "app.sms-mock-enabled=true"
 })
 @AutoConfigureMockMvc
 @Transactional
@@ -33,7 +34,7 @@ class AuthControllerTest {
     void shouldLoginBySmsCode() throws Exception {
         MvcResult sendCodeResult = mockMvc.perform(post("/api/auth/sms-code")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"displayName\":\"演示用户\",\"phoneNumber\":\"13800000000\",\"hrCode\":\"HR0001\"}"))
+                        .content("{\"displayName\":\"演示用户\",\"hrCode\":\"HR0001\",\"phoneNumber\":\"13800000000\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.debugCode").exists())
@@ -44,10 +45,9 @@ class AuthControllerTest {
 
         mockMvc.perform(post("/api/auth/sms-login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"phoneNumber\":\"13800000000\",\"smsCode\":\"" + debugCode + "\"}"))
+                        .content("{\"hrCode\":\"HR0001\",\"phoneNumber\":\"13800000000\",\"smsCode\":\"" + debugCode + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.username").value("demo"))
-                .andExpect(jsonPath("$.data.phoneNumber").value("13800000000"));
+                .andExpect(jsonPath("$.data.username").value("demo"));
     }
 }

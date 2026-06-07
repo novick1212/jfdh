@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.novick.points.common.BusinessException;
 import com.novick.points.domain.ExchangeOrder;
+import com.novick.points.domain.OrderShipment;
 import com.novick.points.domain.OrderStatus;
 import com.novick.points.domain.PointsTransaction;
 import com.novick.points.domain.RewardItem;
@@ -36,6 +37,7 @@ import com.novick.points.domain.TransactionType;
 import com.novick.points.domain.UserAccount;
 import com.novick.points.domain.UserRole;
 import com.novick.points.repository.ExchangeOrderRepository;
+import com.novick.points.repository.OrderShipmentRepository;
 import com.novick.points.repository.PointsTransactionRepository;
 import com.novick.points.repository.RewardItemRepository;
 import com.novick.points.repository.SiteConfigRepository;
@@ -54,19 +56,22 @@ public class MallService {
     private final PointsTransactionRepository pointsTransactionRepository;
     private final UserAccountRepository userAccountRepository;
     private final SiteConfigRepository siteConfigRepository;
+    private final OrderShipmentRepository orderShipmentRepository;
     private final AuthService authService;
     private final Kuaidi100Client kuaidi100Client;
     private final ObjectMapper objectMapper;
 
     public MallService(RewardItemRepository rewardItemRepository, ExchangeOrderRepository exchangeOrderRepository,
             PointsTransactionRepository pointsTransactionRepository, UserAccountRepository userAccountRepository,
-            SiteConfigRepository siteConfigRepository, AuthService authService, Kuaidi100Client kuaidi100Client,
+            SiteConfigRepository siteConfigRepository, OrderShipmentRepository orderShipmentRepository,
+            AuthService authService, Kuaidi100Client kuaidi100Client,
             ObjectMapper objectMapper) {
         this.rewardItemRepository = rewardItemRepository;
         this.exchangeOrderRepository = exchangeOrderRepository;
         this.pointsTransactionRepository = pointsTransactionRepository;
         this.userAccountRepository = userAccountRepository;
         this.siteConfigRepository = siteConfigRepository;
+        this.orderShipmentRepository = orderShipmentRepository;
         this.authService = authService;
         this.kuaidi100Client = kuaidi100Client;
         this.objectMapper = objectMapper;
@@ -138,41 +143,38 @@ public class MallService {
         if (principal == null || principal.getUserId() == null || !principal.getUserId().equals(order.getUserId())) {
             throw new BusinessException("无权限访问");
         }
-        if (order.getTrackingNo() == null || order.getTrackingNo().trim().isEmpty()) {
+
+        // 从 OrderShipment 表获取最新的物流信息
+        List<OrderShipment> shipments = orderShipmentRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
+        if (shipments.isEmpty()) {
             throw new BusinessException("暂无物流信息");
         }
-        if (order.getShippingCarrier() == null || order.getShippingCarrier().trim().isEmpty()) {
-            throw new BusinessException("暂无快递公司编码（快递100 com），请联系管理员补充");
+        // 使用最新的物流单号
+        OrderShipment latestShipment = shipments.get(shipments.size() - 1);
+        
+        return getShipmentTracking(orderId, latestShipment.getId());
+    }
+
+    @Transactional
+    public Map<String, Object> getShipmentTracking(Long orderId, Long shipmentId) {
+        OrderShipment shipment = orderShipmentRepository.findById(shipmentId)
+                .orElseThrow(() -> new BusinessException("物流信息不存在"));
+        if (!shipment.getOrderId().equals(orderId)) {
+            throw new BusinessException("物流信息不匹配");
         }
 
-        int minIntervalSeconds = 1800;
-        if (order.getTrackingUpdatedAt() != null && order.getTrackingData() != null && !order.getTrackingData().trim().isEmpty()) {
-            long seconds = Duration.between(order.getTrackingUpdatedAt(), LocalDateTime.now()).getSeconds();
-            if (seconds >= 0 && seconds < minIntervalSeconds) {
-                try {
-                    Map<String, Object> cached = objectMapper.readValue(order.getTrackingData(), Map.class);
-                    cached.put("cachedAt", order.getTrackingUpdatedAt().format(EXPORT_TIME_FORMATTER));
-                    return cached;
-                } catch (Exception e) {
-                    order.setTrackingData(null);
-                }
-            }
+        String shippingCarrier = shipment.getShippingCarrier();
+        String trackingNo = shipment.getTrackingNo();
+
+        if (trackingNo == null || trackingNo.trim().isEmpty()) {
+            throw new BusinessException("暂无物流单号");
+        }
+        if (shippingCarrier == null || shippingCarrier.trim().isEmpty()) {
+            throw new BusinessException("暂无快递公司编码，请联系管理员补充");
         }
 
-        JsonNode root = kuaidi100Client.query(order.getShippingCarrier(), order.getTrackingNo(), order.getPhone());
-        try {
-            order.setTrackingData(objectMapper.writeValueAsString(root));
-        } catch (Exception e) {
-            order.setTrackingData(root.toString());
-        }
-        order.setTrackingState(root.path("state").asText(null));
-        order.setTrackingUpdatedAt(LocalDateTime.now());
-        order.setUpdatedAt(LocalDateTime.now());
-        exchangeOrderRepository.save(order);
-
-        Map<String, Object> result = objectMapper.convertValue(root, Map.class);
-        result.put("cachedAt", order.getTrackingUpdatedAt().format(EXPORT_TIME_FORMATTER));
-        return result;
+        // 调用快递100查询
+        return kuaidi100Client.queryTracking(shippingCarrier, trackingNo);
     }
 
     public List<Map<String, Object>> listUserTransactions(Long userId) {
@@ -315,25 +317,83 @@ public class MallService {
             throw new BusinessException("当前订单不可发货");
         }
         if (trackingNo != null && !trackingNo.isBlank()) {
+            orderShipmentRepository.findByTrackingNo(trackingNo.trim()).ifPresent(existing -> {
+                throw new BusinessException("物流单号已存在");
+            });
+            OrderShipment shipment = new OrderShipment();
+            shipment.setOrderId(orderId);
+            shipment.setShippingCarrier(shippingCarrier != null ? shippingCarrier.trim().toLowerCase() : null);
+            shipment.setTrackingNo(trackingNo.trim());
+            shipment.setTrackingUrl("https://m.kuaidi100.com/result.jsp?nu=" + trackingNo.trim());
+            orderShipmentRepository.save(shipment);
+            // 同时更新 ExchangeOrder 表的字段，方便 getOrderTracking 查询
+            order.setShippingCarrier(shippingCarrier != null ? shippingCarrier.trim().toLowerCase() : null);
             order.setTrackingNo(trackingNo.trim());
-            order.setTrackingUrl("https://m.kuaidi100.com/result.jsp?nu=" + trackingNo.trim());
-        } else {
-            order.setTrackingNo(null);
-            order.setTrackingUrl(null);
         }
-        if (shippingCarrier != null && !shippingCarrier.isBlank()) {
-            order.setShippingCarrier(shippingCarrier.trim().toLowerCase());
-        } else {
-            order.setShippingCarrier(null);
-        }
-        order.setTrackingState(null);
-        order.setTrackingData(null);
-        order.setTrackingUpdatedAt(null);
         order.setStatus(OrderStatus.FULFILLED);
-        order.setFulfilledAt(LocalDateTime.now());
+        if (order.getFulfilledAt() == null) {
+            order.setFulfilledAt(LocalDateTime.now());
+        }
         order.setUpdatedAt(LocalDateTime.now());
         exchangeOrderRepository.save(order);
         return toOrderMap(order);
+    }
+
+    @Transactional
+    public Map<String, Object> addShipment(Long orderId, String shippingCarrier, String trackingNo) {
+        ExchangeOrder order = exchangeOrderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException("订单不存在"));
+        if (order.getStatus() != OrderStatus.FULFILLED) {
+            throw new BusinessException("当前订单状态不可添加物流");
+        }
+        if (trackingNo == null || trackingNo.isBlank()) {
+            throw new BusinessException("请输入物流单号");
+        }
+        String normalizedTrackingNo = trackingNo.trim();
+        if (orderShipmentRepository.findByTrackingNo(normalizedTrackingNo).isPresent()) {
+            throw new BusinessException("物流单号已存在");
+        }
+        OrderShipment shipment = new OrderShipment();
+        shipment.setOrderId(orderId);
+        shipment.setShippingCarrier(shippingCarrier != null ? shippingCarrier.trim().toLowerCase() : null);
+        shipment.setTrackingNo(normalizedTrackingNo);
+        shipment.setTrackingUrl("https://m.kuaidi100.com/result.jsp?nu=" + normalizedTrackingNo);
+        orderShipmentRepository.save(shipment);
+        // 同时更新 ExchangeOrder 表的字段，方便 getOrderTracking 查询
+        order.setShippingCarrier(shippingCarrier != null ? shippingCarrier.trim().toLowerCase() : null);
+        order.setTrackingNo(normalizedTrackingNo);
+        order.setUpdatedAt(LocalDateTime.now());
+        exchangeOrderRepository.save(order);
+        return toOrderMap(order);
+    }
+
+    @Transactional
+    public void deleteShipment(Long orderId, Long shipmentId) {
+        ExchangeOrder order = exchangeOrderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException("订单不存在"));
+        OrderShipment shipment = orderShipmentRepository.findById(shipmentId)
+                .orElseThrow(() -> new BusinessException("物流记录不存在"));
+        if (!shipment.getOrderId().equals(orderId)) {
+            throw new BusinessException("物流记录与订单不匹配");
+        }
+        orderShipmentRepository.delete(shipment);
+        // 更新订单的物流信息
+        List<OrderShipment> remaining = orderShipmentRepository.findByOrderIdOrderByCreatedAtAsc(orderId);
+        if (remaining.isEmpty()) {
+            order.setShippingCarrier(null);
+            order.setTrackingNo(null);
+        } else {
+            OrderShipment latest = remaining.get(remaining.size() - 1);
+            order.setShippingCarrier(latest.getShippingCarrier());
+            order.setTrackingNo(latest.getTrackingNo());
+        }
+        exchangeOrderRepository.save(order);
+    }
+
+    public List<Map<String, Object>> listShipments(Long orderId) {
+        return orderShipmentRepository.findByOrderIdOrderByCreatedAtAsc(orderId).stream()
+                .map(this::toShipmentMap)
+                .collect(Collectors.toList());
     }
 
     public List<Map<String, Object>> listUsers() {
@@ -491,11 +551,6 @@ public class MallService {
             if (command == null) {
                 continue;
             }
-            String phone = requirePhone(command.getPhoneNumber(), "手机号格式不正确", false);
-            if (phone == null) {
-                errors.add(errorMap(command.getLineNo(), command.getRaw(), "手机号格式不正确"));
-                continue;
-            }
             String displayName = normalize(command.getDisplayName());
             if (displayName == null) {
                 errors.add(errorMap(command.getLineNo(), command.getRaw(), "姓名不能为空"));
@@ -507,26 +562,13 @@ public class MallService {
                 continue;
             }
 
-            UserAccount user = userAccountRepository.findByPhoneNumber(phone).orElse(null);
-            UserAccount byHrCode = userAccountRepository.findByHrCode(hrCode).orElse(null);
-            if (byHrCode != null && (user == null || !byHrCode.getId().equals(user.getId()))) {
-                errors.add(errorMap(command.getLineNo(), command.getRaw(), "人力资源码已被其它用户占用"));
-                continue;
-            }
+            // 通过人力资源码查找用户
+            UserAccount user = userAccountRepository.findByHrCode(hrCode).orElse(null);
 
             if (user == null) {
-                String username = normalize(command.getUsername());
-                if (username == null) {
-                    username = phone;
-                }
-                UserAccount byUsername = userAccountRepository.findByUsername(username).orElse(null);
-                if (byUsername != null) {
-                    errors.add(errorMap(command.getLineNo(), command.getRaw(), "用户名已被其它手机号占用"));
-                    continue;
-                }
+                // 新建用户
                 user = new UserAccount();
-                user.setUsername(username);
-                user.setPhoneNumber(phone);
+                user.setUsername(hrCode);
                 user.setDisplayName(displayName);
                 user.setHrCode(hrCode);
                 user.setRole(UserRole.USER);
@@ -535,34 +577,15 @@ public class MallService {
                 user.setRedeemQuota(USER_REDEEM_LIMIT);
                 user.setRedeemUsed(0);
                 user.setContactName(displayName);
-                user.setContactPhone(phone);
-                user.setContactAddress("请在“我的”页面维护收货地址");
+                user.setContactPhone("");
+                user.setContactAddress("请在\"我的\"页面维护收货地址");
                 user.setPasswordHash(authService.encode("P" + UUID.randomUUID().toString().replace("-", "")));
                 userAccountRepository.save(user);
                 created++;
             } else {
-                String username = normalize(command.getUsername());
-                if (username != null) {
-                    UserAccount byUsername = userAccountRepository.findByUsername(username).orElse(null);
-                    if (byUsername != null && !byUsername.getId().equals(user.getId())) {
-                        errors.add(errorMap(command.getLineNo(), command.getRaw(), "用户名已被其它手机号占用"));
-                        continue;
-                    }
-                    user.setUsername(username);
-                }
+                // 更新已有用户
                 user.setDisplayName(displayName);
-                user.setPhoneNumber(phone);
-                user.setHrCode(hrCode);
                 user.setRedeemQuota(USER_REDEEM_LIMIT);
-                if (safe(user.getContactName()).isBlank()) {
-                    user.setContactName(displayName);
-                }
-                if (safe(user.getContactPhone()).isBlank()) {
-                    user.setContactPhone(phone);
-                }
-                if (safe(user.getContactAddress()).isBlank()) {
-                    user.setContactAddress("请在“我的”页面维护收货地址");
-                }
                 if (!user.isEnabled()) {
                     user.setEnabled(true);
                 }
@@ -731,6 +754,10 @@ public class MallService {
     private Map<String, Object> toOrderMap(ExchangeOrder order) {
         UserAccount user = userAccountRepository.findById(order.getUserId()).orElse(null);
         RewardItem item = rewardItemRepository.findById(order.getItemId()).orElse(null);
+        List<OrderShipment> shipments = orderShipmentRepository.findByOrderIdOrderByCreatedAtAsc(order.getId());
+        List<Map<String, Object>> shipmentsData = shipments.stream()
+                .map(this::toShipmentMap)
+                .collect(Collectors.toList());
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("id", order.getId());
         data.put("orderNo", order.getOrderNo());
@@ -745,11 +772,22 @@ public class MallService {
         data.put("recipientName", order.getRecipientName());
         data.put("phone", order.getPhone());
         data.put("address", order.getAddress());
-        data.put("shippingCarrier", order.getShippingCarrier());
-        data.put("trackingNo", order.getTrackingNo());
-        data.put("trackingUrl", order.getTrackingUrl());
+        data.put("shipments", shipmentsData);
+        data.put("hasShipments", !shipments.isEmpty());
         data.put("fulfilledAt", order.getFulfilledAt());
         data.put("createdAt", order.getCreatedAt());
+        return data;
+    }
+
+    private Map<String, Object> toShipmentMap(OrderShipment shipment) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("id", shipment.getId());
+        data.put("orderId", shipment.getOrderId());
+        data.put("shippingCarrier", shipment.getShippingCarrier());
+        data.put("trackingNo", shipment.getTrackingNo());
+        data.put("trackingUrl", shipment.getTrackingUrl());
+        data.put("trackingState", shipment.getTrackingState());
+        data.put("createdAt", shipment.getCreatedAt());
         return data;
     }
 
@@ -1035,8 +1073,6 @@ public class MallService {
     public static class UserImportCommand {
         private Integer lineNo;
         private String raw;
-        private String phoneNumber;
-        private String username;
         private String displayName;
         private String hrCode;
 
@@ -1054,22 +1090,6 @@ public class MallService {
 
         public void setRaw(String raw) {
             this.raw = raw;
-        }
-
-        public String getPhoneNumber() {
-            return phoneNumber;
-        }
-
-        public void setPhoneNumber(String phoneNumber) {
-            this.phoneNumber = phoneNumber;
-        }
-
-        public String getUsername() {
-            return username;
-        }
-
-        public void setUsername(String username) {
-            this.username = username;
         }
 
         public String getDisplayName() {

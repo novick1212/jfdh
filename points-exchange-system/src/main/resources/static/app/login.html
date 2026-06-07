@@ -3,64 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>用户登录 - 积分兑换系统</title>
+    <title>用户登录 - 福利兑换平台</title>
     <link rel="stylesheet" href="/css/site.css">
 </head>
 <body class="login-page">
 <div class="login-card">
-    <img src="/res/default/bg/image/icon/logo.png" alt="logo">
-    <h1>积分兑换系统</h1>
-    <p>请输入姓名、手机号、人力资源码校验后获取验证码登录</p>
+    <h1>福利兑换平台</h1>
+    <p>请输入姓名和人力资源码登录</p>
     <div class="form-group">
         <label for="displayName">姓名</label>
-        <input id="displayName" value="演示用户" autocomplete="name">
-    </div>
-    <div class="form-group">
-        <label for="phoneNumber">手机号</label>
-        <input id="phoneNumber" value="13800000000" autocomplete="tel">
+        <input id="displayName" placeholder="请输入姓名" autocomplete="name">
     </div>
     <div class="form-group">
         <label for="hrCode">人力资源码</label>
-        <input id="hrCode" value="HR0001" autocomplete="off">
+        <input id="hrCode" placeholder="请输入人力资源码" autocomplete="off">
     </div>
-    <div class="form-group">
-        <label for="smsCode">短信验证码</label>
-        <div style="display:flex; gap:12px;">
-            <input id="smsCode" placeholder="请输入 6 位验证码" style="flex:1;">
-            <button class="btn btn-secondary" type="button" id="sendCodeBtn" style="white-space:nowrap;">发送验证码</button>
-        </div>
-    </div>
-    <div class="muted" id="debugCode" style="margin-bottom:12px; min-height:20px;"></div>
     <div class="error-text" id="error"></div>
     <button class="btn btn-primary" style="width:100%" id="loginBtn">登录用户端</button>
     <p style="margin-top:16px;">管理员请前往 <a href="/admin/login.html" style="color:#2563eb;">后台登录</a></p>
 </div>
 <script src="/js/http.js"></script>
 <script>
-    document.getElementById("sendCodeBtn").addEventListener("click", async () => {
-        const error = document.getElementById("error");
-        const debugCode = document.getElementById("debugCode");
-        error.textContent = "";
-        debugCode.textContent = "";
-        try {
-            const data = await api("/api/auth/sms-code", {
-                method: "POST",
-                body: JSON.stringify({
-                    displayName: document.getElementById("displayName").value.trim(),
-                    phoneNumber: document.getElementById("phoneNumber").value.trim(),
-                    hrCode: document.getElementById("hrCode").value.trim()
-                })
-            });
-            if (data.debugCode) {
-                debugCode.textContent = `开发环境验证码：${data.debugCode}`;
-            } else {
-                debugCode.textContent = "验证码已发送，请查收短信";
-            }
-        } catch (e) {
-            error.textContent = e.message;
-        }
-    });
-
     document.getElementById("loginBtn").addEventListener("click", async () => {
         const error = document.getElementById("error");
         error.textContent = "";
@@ -68,8 +31,8 @@
             const data = await api("/api/auth/sms-login", {
                 method: "POST",
                 body: JSON.stringify({
-                    phoneNumber: document.getElementById("phoneNumber").value.trim(),
-                    smsCode: document.getElementById("smsCode").value.trim()
+                    displayName: document.getElementById("displayName").value.trim(),
+                    hrCode: document.getElementById("hrCode").value.trim()
                 })
             });
             if (data.role === "ADMIN") {

@@ -47,7 +47,7 @@ class FullFlowE2ETest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        String csv = "姓名,手机号,人力资源码\n张三,13900000001,HR9999\n";
+        String csv = "姓名,人力资源码\n张三,HR9999\n";
         MockMultipartFile file = new MockMultipartFile("file", "users.csv", "text/csv",
                 csv.getBytes(StandardCharsets.UTF_8));
         mockMvc.perform(multipart("/api/admin/users/import-csv")
@@ -62,7 +62,7 @@ class FullFlowE2ETest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andReturn();
         JsonNode usersPayload = objectMapper.readTree(usersResult.getResponse().getContentAsString());
-        long userId = findUserIdByPhone(usersPayload.path("data"), "13900000001");
+        long userId = findUserIdByHrCode(usersPayload.path("data"), "HR9999");
 
         mockMvc.perform(post("/api/admin/users/" + userId + "/redeem-quota")
                         .session(adminSession)
@@ -74,7 +74,7 @@ class FullFlowE2ETest {
 
         MvcResult sendCodeResult = mockMvc.perform(post("/api/auth/sms-code")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"displayName\":\"张三\",\"phoneNumber\":\"13900000001\",\"hrCode\":\"HR9999\"}"))
+                        .content("{\"displayName\":\"张三\",\"hrCode\":\"HR9999\",\"phoneNumber\":\"13900000001\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.debugCode").exists())
@@ -86,10 +86,10 @@ class FullFlowE2ETest {
         mockMvc.perform(post("/api/auth/sms-login")
                         .session(userSession)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"phoneNumber\":\"13900000001\",\"smsCode\":\"" + debugCode + "\"}"))
+                        .content("{\"hrCode\":\"HR9999\",\"phoneNumber\":\"13900000001\",\"smsCode\":\"" + debugCode + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.phoneNumber").value("13900000001"));
+                .andExpect(jsonPath("$.data.hrCode").value("HR9999"));
 
         mockMvc.perform(get("/api/auth/me")
                         .session(userSession))
@@ -138,7 +138,9 @@ class FullFlowE2ETest {
                         .content("{\"shippingCarrier\":\"顺丰\",\"trackingNo\":\"SF123456789\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.trackingUrl").exists());
+                .andExpect(jsonPath("$.data.shipments").isArray())
+                .andExpect(jsonPath("$.data.shipments.length()").value(1))
+                .andExpect(jsonPath("$.data.shipments[0].trackingNo").value("SF123456789"));
 
         mockMvc.perform(get("/api/app/orders")
                         .session(userSession))
@@ -156,6 +158,18 @@ class FullFlowE2ETest {
             }
         }
         throw new IllegalStateException("未找到手机号对应用户：" + phoneNumber);
+    }
+
+    private long findUserIdByHrCode(JsonNode users, String hrCode) {
+        if (users == null || !users.isArray()) {
+            throw new IllegalStateException("用户列表返回格式错误");
+        }
+        for (JsonNode user : users) {
+            if (hrCode.equals(user.path("hrCode").asText())) {
+                return user.path("id").asLong();
+            }
+        }
+        throw new IllegalStateException("未找到人力资源码对应用户：" + hrCode);
     }
 
     private long firstOrderIdByUserId(JsonNode orders, long userId) {

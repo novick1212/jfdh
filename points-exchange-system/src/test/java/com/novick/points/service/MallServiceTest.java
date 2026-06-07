@@ -1,6 +1,7 @@
 package com.novick.points.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
@@ -155,8 +156,12 @@ class MallServiceTest {
         Long orderId = ((Number) created.get("id")).longValue();
         Map<String, Object> fulfilled = mallService.fulfillOrder(orderId, "yuantong", "YT10001");
 
-        assertEquals("yuantong", fulfilled.get("shippingCarrier"));
-        assertEquals("YT10001", fulfilled.get("trackingNo"));
+        // 检查订单有物流单号
+        List<Map<String, Object>> shipments = (List<Map<String, Object>>) fulfilled.get("shipments");
+        assertNotNull(shipments);
+        assertEquals(1, shipments.size());
+        assertEquals("yuantong", shipments.get(0).get("shippingCarrier"));
+        assertEquals("YT10001", shipments.get(0).get("trackingNo"));
         assertEquals(OrderStatus.FULFILLED, exchangeOrderRepository.findById(orderId).orElseThrow().getStatus());
     }
 }

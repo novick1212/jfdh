@@ -61,6 +61,12 @@ public class AppController {
         return ApiResponse.success(mallService.getOrderTracking(principal, id));
     }
 
+    @GetMapping("/orders/{id}/shipments")
+    public ApiResponse<List<Map<String, Object>>> orderShipments(@PathVariable Long id, HttpSession session) {
+        SessionPrincipal principal = sessionAuthService.requireLogin(session);
+        return ApiResponse.success(mallService.listShipments(id));
+    }
+
     @GetMapping("/transactions")
     public ApiResponse<List<Map<String, Object>>> transactions(HttpSession session) {
         SessionPrincipal principal = sessionAuthService.requireLogin(session);

@@ -44,14 +44,14 @@ public class AuthController {
 
     @PostMapping("/sms-code")
     public ApiResponse<Map<String, Object>> sendSmsCode(@Valid @RequestBody SmsCodeRequest request) {
-        authService.assertSmsLoginUser(request.getPhoneNumber(), request.getDisplayName(), request.getHrCode());
-        return ApiResponse.success("验证码已发送", smsCodeService.sendCode(request.getPhoneNumber()));
+        return ApiResponse.success("短信功能已关闭", Map.of("disabled", true));
     }
 
     @PostMapping("/sms-login")
     public ApiResponse<Map<String, Object>> smsLogin(@Valid @RequestBody SmsLoginRequest request, HttpSession session) {
-        smsCodeService.verifyCode(request.getPhoneNumber(), request.getSmsCode());
-        SessionPrincipal principal = authService.authenticateByPhone(request.getPhoneNumber());
+        // 直接验证姓名+人力资源码登录
+        authService.assertSmsLoginUser(request.getHrCode(), request.getDisplayName());
+        SessionPrincipal principal = authService.authenticateByHrCode(request.getHrCode());
         sessionAuthService.login(session, principal);
         return ApiResponse.success("登录成功", authService.profile(principal));
     }
@@ -96,9 +96,41 @@ public class AuthController {
         @NotBlank(message = "请输入姓名")
         private String displayName;
 
+        @NotBlank(message = "请输入人力资源码")
+        private String hrCode;
+
         @NotBlank(message = "请输入手机号")
         @Pattern(regexp = "^1\\d{10}$", message = "请输入正确的手机号")
         private String phoneNumber;
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        public void setDisplayName(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public String getHrCode() {
+            return hrCode;
+        }
+
+        public void setHrCode(String hrCode) {
+            this.hrCode = hrCode;
+        }
+
+        public String getPhoneNumber() {
+            return phoneNumber;
+        }
+
+        public void setPhoneNumber(String phoneNumber) {
+            this.phoneNumber = phoneNumber;
+        }
+    }
+
+    public static class SmsLoginRequest {
+        @NotBlank(message = "请输入姓名")
+        private String displayName;
 
         @NotBlank(message = "请输入人力资源码")
         private String hrCode;
@@ -111,46 +143,12 @@ public class AuthController {
             this.displayName = displayName;
         }
 
-        public String getPhoneNumber() {
-            return phoneNumber;
-        }
-
-        public void setPhoneNumber(String phoneNumber) {
-            this.phoneNumber = phoneNumber;
-        }
-
         public String getHrCode() {
             return hrCode;
         }
 
         public void setHrCode(String hrCode) {
             this.hrCode = hrCode;
-        }
-    }
-
-    public static class SmsLoginRequest {
-        @NotBlank(message = "请输入手机号")
-        @Pattern(regexp = "^1\\d{10}$", message = "请输入正确的手机号")
-        private String phoneNumber;
-
-        @NotBlank(message = "请输入验证码")
-        @Pattern(regexp = "^\\d{6}$", message = "请输入 6 位验证码")
-        private String smsCode;
-
-        public String getPhoneNumber() {
-            return phoneNumber;
-        }
-
-        public void setPhoneNumber(String phoneNumber) {
-            this.phoneNumber = phoneNumber;
-        }
-
-        public String getSmsCode() {
-            return smsCode;
-        }
-
-        public void setSmsCode(String smsCode) {
-            this.smsCode = smsCode;
         }
     }
 }

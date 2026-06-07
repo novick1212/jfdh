@@ -10,7 +10,7 @@
 <div class="mobile-shell">
     <header class="mobile-topbar">
         <div>
-            <div class="mobile-title">用户中心 - 积分兑换系统</div>
+            <div class="mobile-title">福利兑换系统</div>
             <div class="mobile-subtitle" id="welcomeText">加载中...</div>
         </div>
         <button class="btn btn-secondary btn-sm" id="logoutBtn">退出登录</button>
@@ -19,17 +19,16 @@
     <main class="mobile-main">
         <section class="mobile-tab-page active" data-tab="home">
             <section class="notice-card">
+                <img id="heroImage" class="hero-image" alt="活动图">
                 <div class="section-title-row">
                     <h2>公告说明</h2>
                     <span class="status-badge" id="redeemBadge">可兑换</span>
                 </div>
                 <div class="rich-text" id="announcementHtml"></div>
-                <img id="heroImage" class="hero-image" alt="活动图">
             </section>
             <section class="section-block">
                 <div class="section-title-row">
-                    <h2>端午福利方案</h2>
-                    <span class="muted">7 选 1，仅可兑换一次</span>
+                    <h2>商品套餐列表</h2>
                 </div>
                 <div class="plan-list" id="itemGrid"></div>
             </section>
@@ -112,6 +111,13 @@
     </div>
 </div>
 
+<div id="imagePreviewModal" class="overlay" style="display:none;align-items:center;justify-content:center;">
+    <div style="position:relative;max-width:95vw;max-height:90vh;">
+        <button onclick="closeImagePreview()" style="position:absolute;top:-40px;right:0;background:none;border:none;color:#fff;font-size:24px;cursor:pointer;">×</button>
+        <img id="previewImage" src="" style="max-width:95vw;max-height:85vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+    </div>
+</div>
+
 <div id="trackingModal" class="overlay" style="display:none;">
     <div class="overlay-card">
         <div class="section-title-row">
@@ -130,6 +136,17 @@
 
     function currentProfile() {
         return homeState?.profile || {};
+    }
+
+    function openImagePreview(url) {
+        if (!url) return;
+        document.getElementById("previewImage").src = url;
+        document.getElementById("imagePreviewModal").style.display = "flex";
+    }
+
+    function closeImagePreview() {
+        document.getElementById("imagePreviewModal").style.display = "none";
+        document.getElementById("previewImage").src = "";
     }
 
     function setActiveTab(tab) {
@@ -155,13 +172,17 @@
 
         document.getElementById("itemGrid").innerHTML = items.map(item => `
             <div class="plan-card">
-                <img src="${escapeHtml(item.coverImage || "")}" alt="${escapeHtml(item.name)}">
                 <div class="plan-card-body">
                     <div class="section-title-row">
                         <h3>${escapeHtml(item.name)}</h3>
                         <span class="status-badge ${item.soldOut ? "sold-out" : ""}">${item.soldOut ? "已售罄" : "可选"}</span>
                     </div>
                     <p>${escapeHtml(item.description || "")}</p>
+                </div>
+                <div class="plan-image-wrapper" onclick="openImagePreview('${escapeHtml(item.coverImage || "")}')">
+                    <img src="${escapeHtml(item.coverImage || "")}" alt="${escapeHtml(item.name)}">
+                </div>
+                <div class="plan-card-footer">
                     <button class="btn btn-primary block-btn" onclick="openRedeemModal(${item.id})"
                         ${hasRedeemed || item.soldOut ? "disabled" : ""}>
                         ${hasRedeemed ? "已完成兑换" : item.soldOut ? "库存不足" : "选择此方案"}
@@ -174,22 +195,29 @@
     function renderOrders() {
         const orders = homeState?.recentOrders || [];
         document.getElementById("orderSummary").textContent = orders.length ? `共 ${orders.length} 条订单` : "暂无订单";
-        document.getElementById("orderList").innerHTML = orders.map(order => `
+        document.getElementById("orderList").innerHTML = orders.map(order => {
+            const shipments = order.shipments || [];
+            const hasShipments = shipments.length > 0;
+            return `
             <div class="order-card">
                 <div class="section-title-row">
                     <h3>${escapeHtml(order.itemName)}</h3>
-                    <span class="status-badge">${escapeHtml(order.status)}</span>
+                    <span class="status-badge">${getOrderStatusText(order.status)}</span>
                 </div>
                 ${order.itemCoverImage ? `<img class="order-cover" src="${escapeHtml(order.itemCoverImage)}" alt="${escapeHtml(order.itemName)}">` : ""}
                 <div class="order-meta">订单号：${escapeHtml(order.orderNo)}</div>
                 <div class="order-meta">收货人：${escapeHtml(order.recipientName)} / ${escapeHtml(order.phone)}</div>
                 <div class="order-meta">收货地址：${escapeHtml(order.address)}</div>
-                ${order.trackingNo ? `<div class="order-meta">物流信息：${escapeHtml(order.shippingCarrier || "-")} / ${escapeHtml(order.trackingNo)}</div>` : ""}
+                ${hasShipments ? shipments.map(s => `
+                    <div class="order-meta">物流信息：${escapeHtml(s.shippingCarrier || "-")} / ${escapeHtml(s.trackingNo)}</div>
+                `).join("") : ""}
                 <div class="order-actions">
-                    ${order.trackingNo ? `<button class="btn btn-secondary btn-sm" onclick="showTracking(${order.id})">查看物流</button>` : '<span class="muted">待管理员发货</span>'}
+                    ${hasShipments ? shipments.map((s, idx) => `
+                        <button class="btn btn-secondary btn-sm" style="margin-right:8px;margin-bottom:4px;" onclick="showTracking(${order.id}, ${s.id})">查看物流${shipments.length > 1 ? " " + (idx + 1) : ""}</button>
+                    `).join("") : '<span class="muted">待管理员发货</span>'}
                 </div>
             </div>
-        `).join("") || '<div class="empty-card">你还没有提交订单</div>';
+        `}).join("") || '<div class="empty-card">你还没有提交订单</div>';
     }
 
     function renderProfile() {
@@ -295,7 +323,7 @@
         }
     }
 
-    async function showTracking(orderId) {
+    async function showTracking(orderId, shipmentId) {
         const modal = document.getElementById("trackingModal");
         const metaEl = document.getElementById("trackingMeta");
         const timelineEl = document.getElementById("trackingTimeline");
@@ -303,9 +331,17 @@
         metaEl.textContent = "加载中...";
         timelineEl.innerHTML = "";
         try {
-            const tracking = await api(`/api/app/orders/${orderId}/tracking`);
+            // 获取物流单号列表
+            const shipments = await api(`/api/app/orders/${orderId}/shipments`);
+            const targetShipment = shipmentId ? shipments.find(s => s.id === shipmentId) : shipments[0];
+            if (!targetShipment) {
+                metaEl.textContent = "未找到物流信息";
+                return;
+            }
+            // 查询该物流单号的轨迹
+            const tracking = await api(`/api/app/orders/${orderId}/tracking?shipmentId=${targetShipment.id || 0}`);
             const stateText = tracking.state === "3" ? "已签收" : tracking.state === "5" ? "派件中" : tracking.state === "1" ? "揽收" : tracking.state === "0" ? "在途" : (tracking.state || "-");
-            metaEl.textContent = `快递公司：${tracking.com || "-"}，单号：${tracking.nu || "-"}，状态：${stateText}，更新时间：${tracking.cachedAt || "-"}`;
+            metaEl.textContent = `快递公司：${tracking.com || targetShipment.shippingCarrier || "-"}，单号：${tracking.nu || targetShipment.trackingNo || "-"}，状态：${stateText}，更新时间：${tracking.cachedAt || "-"}`;
             const list = Array.isArray(tracking.data) ? tracking.data : [];
             timelineEl.innerHTML = list.map(item => `
                 <div class="timeline-card">
@@ -340,6 +376,11 @@
     document.getElementById("redeemModal").addEventListener("click", (e) => {
         if (e.target && e.target.id === "redeemModal") {
             closeRedeemModal();
+        }
+    });
+    document.getElementById("imagePreviewModal").addEventListener("click", (e) => {
+        if (e.target && e.target.id === "imagePreviewModal") {
+            closeImagePreview();
         }
     });
     document.getElementById("trackingModal").addEventListener("click", (e) => {

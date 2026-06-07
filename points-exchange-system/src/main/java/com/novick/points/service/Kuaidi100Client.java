@@ -1,142 +1,187 @@
 package com.novick.points.service;
 
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.time.Duration;
-import java.util.LinkedHashMap;
-import java.util.Locale;
-import java.util.Map;
-
-import org.springframework.core.env.Environment;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.kuaidi100.sdk.api.QueryTrack;
+import com.kuaidi100.sdk.core.IBaseClient;
+import com.kuaidi100.sdk.pojo.HttpResult;
+import com.kuaidi100.sdk.request.QueryTrackReq;
+import com.kuaidi100.sdk.request.QueryTrackParam;
+import com.kuaidi100.sdk.utils.SignUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.novick.points.common.BusinessException;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 @Component
 public class Kuaidi100Client {
 
-    private static final String QUERY_URL = "https://poll.kuaidi100.com/poll/query.do";
+    private static final Logger log = LoggerFactory.getLogger(Kuaidi100Client.class);
 
-    private final Environment env;
-    private final ObjectMapper objectMapper;
-    private final HttpClient httpClient;
+    @Value("${kuaidi100.key:}")
+    private String key;
 
-    public Kuaidi100Client(Environment env, ObjectMapper objectMapper) {
-        this.env = env;
-        this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
-    }
+    @Value("${kuaidi100.customer:}")
+    private String customer;
 
-    public JsonNode query(String companyCode, String trackingNo, String phone) {
-        String customer = requiredEnv("KUAIDI100_CUSTOMER");
-        String key = requiredEnv("KUAIDI100_KEY");
+    private final Gson gson = new Gson();
+    private final IBaseClient queryTrack = new QueryTrack();
 
-        String com = normalizeCompanyCode(companyCode);
-        String num = trackingNo == null ? "" : trackingNo.trim();
-        if (com.isEmpty()) {
-            throw new BusinessException("缺少快递公司编码（快递100 com），请后台发货时填写");
-        }
-        if (num.isEmpty()) {
-            throw new BusinessException("缺少快递单号");
-        }
-
-        Map<String, Object> paramMap = new LinkedHashMap<>();
-        paramMap.put("com", com);
-        paramMap.put("num", num);
-        if (phone != null && !phone.trim().isEmpty()) {
-            paramMap.put("phone", phone.trim());
-        }
-        paramMap.put("resultv2", env.getProperty("KUAIDI100_RESULTV2", "1"));
-        paramMap.put("show", "0");
-        paramMap.put("order", "desc");
-        paramMap.put("lang", env.getProperty("KUAIDI100_LANG", "zh"));
-        if (Boolean.parseBoolean(env.getProperty("KUAIDI100_NEED_COURIER_INFO", "false"))) {
-            paramMap.put("needCourierInfo", true);
+    public Map<String, Object> queryTracking(String carrier, String trackingNo) {
+        if (key == null || key.isEmpty() || customer == null || customer.isEmpty()) {
+            throw new RuntimeException("请配置快递100密钥");
         }
 
         try {
-            String paramJson = objectMapper.writeValueAsString(paramMap);
-            String sign = md5Upper(paramJson + key + customer);
-            String body = formBody(Map.of(
-                    "customer", customer,
-                    "sign", sign,
-                    "param", paramJson));
+            QueryTrackReq queryTrackReq = new QueryTrackReq();
+            QueryTrackParam queryTrackParam = new QueryTrackParam();
+            
+            // 标准化快递公司编码
+            String normalizedCom = normalizeCompanyCode(carrier);
+            queryTrackParam.setCom(normalizedCom);
+            queryTrackParam.setNum(trackingNo);
+            // 不设置resultv2，与debug工具保持一致
+            queryTrackParam.setShow("0");
+            queryTrackParam.setOrder("desc");
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(QUERY_URL))
-                    .timeout(Duration.ofSeconds(15))
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build();
+            String param = gson.toJson(queryTrackParam);
+            queryTrackReq.setParam(param);
+            queryTrackReq.setCustomer(customer);
+            queryTrackReq.setSign(SignUtils.querySign(param, key, customer));
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            String text = response.body() == null ? "" : response.body();
-            JsonNode root = objectMapper.readTree(text);
+            HttpResult httpResult = (HttpResult) queryTrack.execute(queryTrackReq);
+            String resultStr = httpResult.getBody();
+            log.info("快递100查询结果: {}", resultStr);
+            
+            // 解析返回的JSON字符串
+            Map<String, Object> response = gson.fromJson(resultStr, new TypeToken<Map<String, Object>>(){}.getType());
+            
+            return buildResponse(response, carrier, trackingNo);
 
-            if (root.has("result") && !root.path("result").asBoolean(true)) {
-                String message = root.path("message").asText("");
-                String code = root.path("returnCode").asText("");
-                throw new BusinessException((code.isEmpty() ? "" : code + " ") + (message.isEmpty() ? "查询失败" : message));
-            }
-            if (root.has("status") && !"200".equals(root.path("status").asText())) {
-                String message = root.path("message").asText("");
-                throw new BusinessException(message.isEmpty() ? "查询失败" : message);
-            }
-            return root;
-        } catch (BusinessException e) {
-            throw e;
         } catch (Exception e) {
-            throw new BusinessException("查询物流失败：" + e.getMessage());
+            log.error("查询快递失败: carrier={}, trackingNo={}, error={}", carrier, trackingNo, e.getMessage());
+            throw new RuntimeException("查询快递失败: " + e.getMessage());
         }
     }
 
-    private String requiredEnv(String key) {
-        String value = env.getProperty(key);
-        if (value == null || value.trim().isEmpty()) {
-            throw new BusinessException("缺少环境变量 " + key + "，请在服务器环境变量中配置快递100企业版参数");
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildResponse(Map<String, Object> resp, String carrier, String trackingNo) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        
+        // 检查是否有错误
+        String status = (String) resp.get("status");
+        if ("0".equals(status)) {
+            result.put("success", false);
+            result.put("message", resp.get("message"));
+            result.put("com", carrier);
+            result.put("nu", trackingNo);
+            result.put("state", "");
+            result.put("data", new java.util.ArrayList<>());
+            return result;
         }
-        return value.trim();
+        
+        result.put("success", true);
+        result.put("com", resp.get("com"));
+        result.put("nu", resp.get("nu"));
+        result.put("state", resp.get("state"));
+        
+        // 解析物流轨迹
+        Object data = resp.get("data");
+        if (data instanceof List) {
+            result.put("data", data);
+        } else {
+            result.put("data", new java.util.ArrayList<>());
+        }
+        
+        result.put("message", resp.get("message"));
+        result.put("cachedAt", java.time.LocalDateTime.now().toString());
+        return result;
     }
 
     private String normalizeCompanyCode(String input) {
-        if (input == null) {
+        if (input == null || input.isEmpty()) {
             return "";
         }
-        return input.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private String formBody(Map<String, String> params) {
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> entry : params.entrySet()) {
-            if (sb.length() > 0) {
-                sb.append("&");
-            }
-            sb.append(encode(entry.getKey())).append("=").append(encode(entry.getValue()));
+        String code = input.trim().toLowerCase(Locale.ROOT);
+        // 快递100标准编码映射
+        switch (code) {
+            // 韵达系列
+            case "yunda":
+            case "yd":
+            case "韵达":
+            case "韵达快递":
+                return "yunda";
+            // 圆通
+            case "yuantong":
+            case "yt":
+            case "圆通":
+            case "圆通速递":
+                return "yuantong";
+            // 中通
+            case "zhongtong":
+            case "zt":
+            case "中通":
+            case "中通快递":
+                return "zhongtong";
+            // 申通
+            case "shentong":
+            case "st":
+            case "申通":
+            case "申通快递":
+                return "shentong";
+            // 顺丰
+            case "shunfeng":
+            case "sf":
+            case "顺丰":
+            case "顺丰速运":
+                return "shunfeng";
+            // 极兔
+            case "jtexpress":
+            case "jt":
+            case "极兔":
+            case "极兔速递":
+                return "jtexpress";
+            // 京东
+            case "jd":
+            case "jdwl":
+            case "京东":
+            case "京东物流":
+                return "jd";
+            // EMS
+            case "ems":
+            case "邮政ems":
+                return "ems";
+            // 德邦
+            case "debangkuaidi":
+            case "db":
+            case "德邦":
+            case "德邦快递":
+                return "debangkuaidi";
+            // 百世
+            case "huitongkuaidi":
+            case "bs":
+            case "百世":
+            case "百世快递":
+                return "huitongkuaidi";
+            // 邮政
+            case "youzhengguonei":
+            case "yz":
+            case "邮政":
+            case "邮政快递包裹":
+                return "youzhengguonei";
+            // 安能
+            case "annengwuliu":
+            case "an":
+            case "安能":
+            case "安能快运":
+                return "annengwuliu";
+            default:
+                return code;
         }
-        return sb.toString();
-    }
-
-    private String encode(String value) {
-        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
-    }
-
-    private String md5Upper(String text) throws Exception {
-        MessageDigest md = MessageDigest.getInstance("MD5");
-        byte[] bytes = md.digest((text == null ? "" : text).getBytes(StandardCharsets.UTF_8));
-        StringBuilder sb = new StringBuilder();
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b));
-        }
-        return sb.toString().toUpperCase(Locale.ROOT);
     }
 }
-

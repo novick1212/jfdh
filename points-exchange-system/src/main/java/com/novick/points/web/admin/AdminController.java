@@ -29,6 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.novick.points.common.ApiResponse;
 import com.novick.points.domain.UserRole;
 import com.novick.points.security.SessionAuthService;
+import com.novick.points.security.SessionPrincipal;
+import com.novick.points.service.AuthService;
 import com.novick.points.service.MallService;
 
 @Validated
@@ -37,10 +39,12 @@ import com.novick.points.service.MallService;
 public class AdminController {
 
     private final MallService mallService;
+    private final AuthService authService;
     private final SessionAuthService sessionAuthService;
 
-    public AdminController(MallService mallService, SessionAuthService sessionAuthService) {
+    public AdminController(MallService mallService, AuthService authService, SessionAuthService sessionAuthService) {
         this.mallService = mallService;
+        this.authService = authService;
         this.sessionAuthService = sessionAuthService;
     }
 
@@ -48,6 +52,12 @@ public class AdminController {
     public ApiResponse<Map<String, Object>> summary(HttpSession session) {
         sessionAuthService.requireRole(session, UserRole.ADMIN);
         return ApiResponse.success(mallService.adminSummary());
+    }
+
+    @PostMapping("/profile")
+    public ApiResponse<Map<String, Object>> updateProfile(@Valid @RequestBody UpdateProfileRequest request, HttpSession session) {
+        SessionPrincipal principal = sessionAuthService.requireRole(session, UserRole.ADMIN);
+        return ApiResponse.success("修改成功", authService.updateAdminProfile(principal.getUserId(), request.getUsername(), request.getOldPassword(), request.getNewPassword()));
     }
 
     @GetMapping("/site-config")
@@ -107,6 +117,28 @@ public class AdminController {
         return ApiResponse.success("发货完成", mallService.fulfillOrder(id, request.getShippingCarrier(), request.getTrackingNo()));
     }
 
+    @PostMapping("/orders/{id}/shipments")
+    public ApiResponse<Map<String, Object>> addShipment(@PathVariable Long id,
+            @Valid @RequestBody FulfillOrderRequest request, HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        return ApiResponse.success("物流已添加", mallService.addShipment(id, request.getShippingCarrier(), request.getTrackingNo()));
+    }
+
+    @DeleteMapping("/orders/{orderId}/shipments/{shipmentId}")
+    public ApiResponse<Void> deleteShipment(@PathVariable Long orderId, @PathVariable Long shipmentId, HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        mallService.deleteShipment(orderId, shipmentId);
+        return ApiResponse.success("物流已删除", null);
+    }
+
+    @GetMapping("/orders/{orderId}/shipments/{shipmentId}/tracking")
+    public ApiResponse<Map<String, Object>> getShipmentTracking(@PathVariable Long orderId, 
+            @PathVariable Long shipmentId, HttpSession session) {
+        sessionAuthService.requireRole(session, UserRole.ADMIN);
+        Map<String, Object> tracking = mallService.getShipmentTracking(orderId, shipmentId);
+        return ApiResponse.success(tracking);
+    }
+
     @GetMapping("/users")
     public ApiResponse<List<Map<String, Object>>> users(HttpSession session) {
         sessionAuthService.requireRole(session, UserRole.ADMIN);
@@ -147,12 +179,58 @@ public class AdminController {
             return ApiResponse.failure("请选择 CSV 文件");
         }
         try {
-            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            String content = decodeWithCharsetDetection(file.getBytes());
             List<MallService.UserImportCommand> users = parseCsv(content);
             return ApiResponse.success("导入完成", mallService.importUsers(users));
         } catch (Exception e) {
             return ApiResponse.failure("导入失败：" + e.getMessage());
         }
+    }
+
+    private String decodeWithCharsetDetection(byte[] bytes) {
+        // 先尝试 UTF-8
+        String utf8Content = new String(bytes, StandardCharsets.UTF_8);
+        if (!looksLikeGarbled(utf8Content)) {
+            return utf8Content;
+        }
+        // 尝试 GBK（中文 Windows 常用）
+        try {
+            String gbkContent = new String(bytes, "GBK");
+            if (!looksLikeGarbled(gbkContent)) {
+                return gbkContent;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        // 尝试 GB2312
+        try {
+            String gb2312Content = new String(bytes, "GB2312");
+            if (!looksLikeGarbled(gb2312Content)) {
+                return gb2312Content;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        // 回退到 UTF-8
+        return utf8Content;
+    }
+
+    private boolean looksLikeGarbled(String content) {
+        if (content == null || content.isEmpty()) {
+            return false;
+        }
+        // 检测是否包含乱码特征：连续的 ? 或 锟斤拷 等
+        if (content.contains("锟斤拷") || content.contains("�")) {
+            return true;
+        }
+        // 检测中文乱码比例
+        long chineseCount = content.chars().filter(c -> c >= 0x4E00 && c <= 0x9FA5).count();
+        long totalCount = content.length();
+        if (totalCount > 0 && chineseCount > 0) {
+            // 如果有中文字符但识别率太低，可能是乱码
+            return chineseCount < totalCount * 0.1 && totalCount > 50;
+        }
+        return false;
     }
 
     private List<MallService.UserImportCommand> parseCsv(String content) {
@@ -173,7 +251,6 @@ public class AdminController {
             startIndex = 1;
         }
 
-        boolean hrMode = looksLikeHrMode(first);
         int startLineNo = startIndex + 1;
         List<String> dataLines = lines.subList(startIndex, lines.size());
         return java.util.stream.IntStream.range(0, dataLines.size()).mapToObj(i -> {
@@ -185,30 +262,12 @@ public class AdminController {
             MallService.UserImportCommand cmd = new MallService.UserImportCommand();
             cmd.setLineNo(lineNo);
             cmd.setRaw(raw);
-            boolean smartHrMode = hrMode || (parts.length >= 3 && isPhone(parts[1]) && !isPhone(parts[0]));
-            if (smartHrMode) {
-                if (parts.length >= 1) {
-                    cmd.setDisplayName(parts[0]);
-                }
-                if (parts.length >= 2) {
-                    cmd.setPhoneNumber(parts[1]);
-                }
-                if (parts.length >= 3) {
-                    cmd.setHrCode(parts[2]);
-                }
-            } else {
-                if (parts.length >= 1) {
-                    cmd.setPhoneNumber(parts[0]);
-                }
-                if (parts.length >= 2) {
-                    cmd.setUsername(parts[1]);
-                }
-                if (parts.length >= 3) {
-                    cmd.setDisplayName(parts[2]);
-                }
-                if (parts.length >= 4) {
-                    cmd.setHrCode(parts[3]);
-                }
+            // 格式：姓名,人力资源码
+            if (parts.length >= 1) {
+                cmd.setDisplayName(parts[0]);
+            }
+            if (parts.length >= 2) {
+                cmd.setHrCode(parts[1]);
             }
             return cmd;
         }).collect(Collectors.toList());
@@ -217,19 +276,7 @@ public class AdminController {
     private boolean looksLikeHeader(String line) {
         String normalized = (line == null ? "" : line).toLowerCase();
         return normalized.contains("phone") || normalized.contains("手机号") || normalized.contains("username")
-                || normalized.contains("用户名") || normalized.contains("hr") || normalized.contains("人力");
-    }
-
-    private boolean looksLikeHrMode(String line) {
-        String normalized = (line == null ? "" : line).toLowerCase();
-        return normalized.contains("hr") || normalized.contains("人力");
-    }
-
-    private boolean isPhone(String value) {
-        if (value == null) {
-            return false;
-        }
-        return value.trim().matches("^1\\d{10}$");
+                || normalized.contains("用户名") || normalized.contains("hr") || normalized.contains("人力") || normalized.contains("name") || normalized.contains("姓名");
     }
 
     public static class SaveItemRequest {
@@ -396,6 +443,36 @@ public class AdminController {
 
         public void setTrackingNo(String trackingNo) {
             this.trackingNo = trackingNo;
+        }
+    }
+
+    public static class UpdateProfileRequest {
+        private String username;
+        private String oldPassword;
+        private String newPassword;
+
+        public String getUsername() {
+            return username;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public String getOldPassword() {
+            return oldPassword;
+        }
+
+        public void setOldPassword(String oldPassword) {
+            this.oldPassword = oldPassword;
+        }
+
+        public String getNewPassword() {
+            return newPassword;
+        }
+
+        public void setNewPassword(String newPassword) {
+            this.newPassword = newPassword;
         }
     }
 }
