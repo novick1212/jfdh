@@ -5,12 +5,12 @@ spring:
   application:
     name: points-exchange-system
 
-  # === MySQL 配置 (推荐) ===
+  # === MySQL 配置 (支持环境变量部署) ===
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/points_exchange?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: root123
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://113.44.121.131:3306/points_exchange?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:rsdb}
+    password: ${SPRING_DATASOURCE_PASSWORD:rs@2025}
   jpa:
     database-platform: org.hibernate.dialect.MySQL8Dialect
     hibernate:
