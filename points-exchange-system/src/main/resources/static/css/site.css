@@ -415,10 +415,14 @@ th {
 .plan-card img,
 .order-cover {
     width: 100%;
-    height: 100%;
     object-fit: cover;
     display: block;
     background: #f3f4f6;
+}
+
+.order-cover {
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
 }
 
 .plan-card-body,
